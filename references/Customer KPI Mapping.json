@@ -1,0 +1,134 @@
+{
+  "_comment": "Customer KPI Mapping — used by generate_dashboard.py and summarize_weekly_production.py",
+  "_format": {
+    "Customer Type": "Full-time | Ad-hoc",
+    "Expected Metric": "Jobs | Layouts",
+    "Daily Expected Output": "numeric — weekly target = Daily × 5"
+  },
+
+  "Cleveland Trade Centre": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 6
+  },
+
+  "East Coast Frames & Trusses": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Layouts",
+    "Daily Expected Output": 8
+  },
+
+  "MCM Frame & Truss": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 2
+  },
+
+  "Creative Homes": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 4
+  },
+
+  "Prime Design Tas PTY LTD (drafting)": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 2
+  },
+
+  "RES Engineering": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "Brock Building Systems": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "NVR": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "AR Built Homes": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "DRC Hobart": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0.4
+  },
+
+  "ARK Coatings": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0.2
+  },
+
+  "Carter Lumber": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "G.J Ararat": {
+    "Customer Type": "Full-time",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 1
+  },
+
+  "DeMar Timber & Hardware": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "All U Want Building Supplies": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "Unitex - STO Group": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "A Wood Shed": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "Tilling Timber Pty Ltd (Other)": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "BM Design": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "RM Property Group": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  },
+
+  "MyTeam VN": {
+    "Customer Type": "Ad-hoc",
+    "Expected Metric": "Jobs",
+    "Daily Expected Output": 0
+  }
+}

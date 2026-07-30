@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weekly Output Dashboard</title>
+<style>
+  :root{
+    --bg:#f5f4f0; --card:#ffffff; --ink:#1c1b19; --ink-soft:#605e58; --ink-mute:#8b8983;
+    --line:#e2e0d8; --accent:#185fa5; --accent-soft:#e6f1fb;
+    --green:#3b6d11; --amber:#854f0b; --red:#a32d2d;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+  .wrap{max-width:100%;margin:0 auto;padding:28px 24px 60px;}
+  header{margin-bottom:20px;}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;}
+  .sub{font-size:14.5px;color:var(--ink-soft);}
+  .insight{display:flex;gap:8px;align-items:flex-start;background:#eef5fb;border-left:3px solid var(--accent);padding:8px 12px;margin:10px 0 4px;font-size:13.5px;color:var(--ink);border-radius:0 6px 6px 0;line-height:1.45;}
+  .insight b{color:var(--accent);font-weight:700;white-space:nowrap;}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+  #filterPanel{position:sticky;top:0;z-index:50;box-shadow:0 2px 6px rgba(0,0,0,0.06);}
+  .filters{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:4px;min-width:180px;}
+  .field label{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-mute);font-weight:600;}
+  select{height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:0 10px;font-size:14px;color:var(--ink);}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .kpi .lab{font-size:13.5px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.03em;font-weight:600;margin-bottom:6px;}
+  .kpi .val{font-size:22px;font-weight:600;}
+  .kpi .val.blue{color:var(--accent);}
+  .row2{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-bottom:18px;}
+  .panel h2{font-size:16px;font-weight:600;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:right;font-size:12.5px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink-mute);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);}
+  th:first-child,td:first-child{text-align:left;}
+  td{padding:7px 8px;border-bottom:1px solid #eeece5;text-align:right;color:var(--ink);}
+  tr:hover td{background:#faf9f6;}
+  .team-tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 7px;border-radius:10px;background:var(--accent-soft);color:var(--accent);}
+  .badge{display:inline-block;font-size:12.5px;font-weight:600;padding:2px 8px;border-radius:10px;}
+  .badge-yes{background:#e5f3dd;color:var(--green);}
+  .badge-no{background:#fbe6e6;color:var(--red);}
+  .badge-na{background:#efeee8;color:var(--ink-mute);}
+  .sla-row{display:flex;gap:4px;flex-wrap:nowrap;}
+  .sla-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#fff;padding:3px 7px;border-radius:5px;white-space:nowrap;cursor:help;}
+  .sla-5{background:#2f7d52;} .sla-4{background:#3f8f5e;} .sla-3{background:#8a7a1f;} .sla-2{background:#b08a1f;} .sla-1{background:#a13b3b;} .sla-0{background:#c0392b;} .sla-none{background:#8b8983;}
+  .completed-today{color:var(--green);font-weight:700;}
+  .customer-link{color:var(--accent);font-weight:600;}
+  .legend-chip{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:2px 4px;border-radius:4px;transition:opacity .15s;}
+  .legend-chip:hover{background:#f2f1ec;}
+  .legend-chip.chip-off{opacity:.4;}
+  .legend-chip .swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
+  .scope-btn{font-size:13px;font-weight:600;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;}
+  .scope-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  #summaryTable td:first-child, #summaryTable th:first-child{text-align:left;}
+  #summaryTable tr.total td{font-weight:600;background:#faf9f6;}
+  #summaryTable tr.sub td:first-child{color:var(--ink-soft);padding-left:22px;}
+  #summaryTable tr.section td:first-child{padding-top:12px;font-weight:600;}
+  .scrollbox{max-height:420px;overflow-y:auto;overflow-x:auto;}
+  .empty{color:var(--ink-mute);font-size:14px;padding:16px 4px;text-align:center;}
+  canvas{max-width:100%;}
+  @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);} .row2{grid-template-columns:1fr;}}
+  .tabbar{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line);}
+  .tab-btn{background:none;border:none;padding:10px 18px;font-size:14px;font-weight:600;color:var(--ink-mute);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab-btn:hover{color:var(--ink);}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  #ganttFrame{width:100%;height:88vh;border:none;border-radius:10px;background:#fff;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tabbar">
+    <button type="button" class="tab-btn active" data-tab="dashboard">Output dashboard</button>
+    <button type="button" class="tab-btn" data-tab="gantt">Workflow quality (Gantt)</button>
+  </div>
+
+  <div class="tab-panel active" id="tabDashboard">
+  <header>
+    <h1>Weekly output dashboard</h1>
+    <div class="sub" id="subtitle">Loading data…</div>
+  </header>
+
+  <div class="panel" id="filterPanel">
+    <div class="filters">
+      <div class="field">
+        <label for="weekSel">Week</label>
+        <select id="weekSel"></select>
+      </div>
+      <div class="field">
+        <label for="teamSel">Team</label>
+        <select id="teamSel"></select>
+      </div>
+      <div class="field">
+        <label for="custSel">Customer</label>
+        <select id="custSel"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="insight" id="kpiInsight" style="margin-top:-6px;"></div>
+
+  <div class="row2">
+    <div class="panel">
+      <h2 id="passthroughTitle">Weekly trend - jobs pass through</h2>
+      <div id="passthroughLegend" style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:8px;font-size:13.5px;color:var(--ink-mute);"></div>
+      <div style="position:relative;width:100%;height:300px;">
+        <canvas id="passthroughChart" role="img" aria-label="Clustered bar chart of jobs sent, jobs completed (split into intra-week and pass-week), and job backlog, by week"></canvas>
+      </div>
+      <div class="insight" id="passthroughInsight"></div>
+    </div>
+
+    <div class="panel">
+      <h2 id="agingTitle">Backlog aging by customer (SLA mode)</h2>
+      <div class="sub" id="agingSub" style="margin-bottom:8px;"></div>
+      <div class="scrollbox" style="max-height:480px;">
+        <table id="agingTable">
+          <thead><tr><th>Customer</th><th>Active jobs</th><th>SLA distribution (days left)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="insight" id="agingInsight"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 id="byCustomerTitle">Job weekly by customer</h2>
+    <div class="sub" id="byCustomerSub" style="margin-bottom:8px;"></div>
+    <div id="byCustomerLegend" style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:8px;font-size:13.5px;color:var(--ink-mute);"></div>
+    <div style="max-height:480px;overflow-y:auto;overflow-x:hidden;">
+      <div style="position:relative;width:100%;" id="byCustomerWrap">
+        <canvas id="byCustomerChart" role="img" aria-label="Horizontal stacked bar chart of jobs sent, jobs completed (split into intra-week and pass-week), and job backlog, by customer, for the selected week"></canvas>
+      </div>
+    </div>
+    <div class="insight" id="byCustomerInsight"></div>
+  </div>
+
+  <div class="panel">
+    <h2 id="trendTitle">Weekly trend</h2>
+    <div id="trendLegend" style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:8px;font-size:13.5px;color:var(--ink-mute);"></div>
+    <div style="position:relative;width:100%;height:260px;">
+      <canvas id="trendChart" role="img" aria-label="Stacked bar chart of jobs completed by week, segmented by project type"></canvas>
+    </div>
+    <div class="insight" id="trendInsight"></div>
+  </div>
+
+
+  <div class="panel">
+    <h2 id="summaryTitle">5-week summary</h2>
+    <div class="scrollbox" style="max-height:none;">
+      <table id="summaryTable">
+        <thead><tr id="summaryHead"></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <h2 id="scatterTitle" style="margin:0;">Project size vs. time consumed</h2>
+      <div id="scatterScopeToggle" style="display:flex;gap:6px;">
+        <button type="button" class="scope-btn" data-scope="week">This week</button>
+        <button type="button" class="scope-btn" data-scope="all">All weeks in filter</button>
+      </div>
+    </div>
+    <div class="sub" style="margin:6px 0 10px;">Each bubble is one completed job. X = designed sqm, Y = dwelling units, bubble size = hours invested — all from Design tasks.</div>
+    <div id="scatterLegend" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:8px;font-size:13.5px;color:var(--ink-mute);"></div>
+    <div style="position:relative;width:100%;height:420px;">
+      <canvas id="scatterChart" role="img" aria-label="Bubble scatter chart of designed square meters versus dwelling units per job, colored by job type, with bubble size representing hours invested"></canvas>
+      <div id="scatterSummary" style="position:absolute;top:10px;right:14px;background:rgba(255,255,255,0.94);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11.5px;box-shadow:0 1px 4px rgba(0,0,0,0.08);pointer-events:none;max-width:220px;"></div>
+    </div>
+    <div class="insight" id="scatterInsight"></div>
+  </div>
+
+  <div class="row2">
+    <div class="panel">
+      <h2 id="custTableTitle">Output by customer</h2>
+      <div class="scrollbox">
+        <table id="custTable">
+          <thead><tr><th>Customer</th><th>Team</th><th>Jobs</th><th>Layouts</th><th>Units</th><th>Sqm</th><th>Avg sqm/job</th><th>Expected output</th><th>Achieved?</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="insight" id="custTableInsight"></div>
+    </div>
+    <div class="panel">
+      <h2 id="ltTitle">Avg leadtime by customer (days)</h2>
+      <div style="position:relative;width:100%;height:380px;">
+        <canvas id="ltChart" role="img" aria-label="Bar chart of average leadtime in days by customer"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 id="empTableTitle">Output by employee</h2>
+    <div class="scrollbox">
+      <table id="empTable">
+        <thead><tr><th>Employee</th><th>Team</th><th>Customer</th><th>Design tasks</th><th>Check tasks</th><th>Review &amp; Fix tasks</th><th>Rework rate</th><th>Layouts</th><th>Units</th><th>Sqm</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <header style="margin:36px 0 6px;">
+    <h1 style="font-size:18px;">Diagnostics</h1>
+    <div class="sub">Rework and backlog-aging analysis, layered on top of the output data above.</div>
+  </header>
+
+  <div class="panel">
+    <h2 id="reworkTitle">Rework rate by team</h2>
+    <div class="sub" style="margin-bottom:10px;">Review &amp; Fix tasks completed as a % of Design tasks completed — a proxy for how much design work gets sent back for correction.</div>
+    <div style="position:relative;width:100%;height:260px;">
+      <canvas id="reworkChart" role="img" aria-label="Horizontal bar chart of rework rate percentage by team"></canvas>
+    </div>
+    <div class="insight" id="reworkInsight"></div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <h2 id="forecastTitle" style="margin:0;">Backlog clearance forecast</h2>
+      <div class="field" style="min-width:auto;">
+        <label for="targetWeeksInput">Target: clear within</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" id="targetWeeksInput" min="1" max="12" step="1" value="2" style="width:56px;height:34px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font-size:14px;">
+          <span style="font-size:13px;color:var(--ink-soft);">weeks</span>
+        </div>
+      </div>
+    </div>
+    <div class="sub" id="forecastSub" style="margin:8px 0 10px;"></div>
+    <div id="forecastLegend" style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:8px;font-size:13.5px;color:var(--ink-mute);"></div>
+    <div style="max-height:420px;overflow-y:auto;overflow-x:hidden;">
+      <div style="position:relative;width:100%;" id="forecastChartWrap">
+        <canvas id="forecastChart" role="img" aria-label="Horizontal bar chart of weeks needed to clear backlog per customer at current pace, and additional staff needed to hit target"></canvas>
+      </div>
+    </div>
+    <div class="insight" id="forecastInsight"></div>
+    <h2 style="margin:22px 0 10px;font-size:14px;">Detail by customer</h2>
+    <div class="scrollbox">
+      <table id="forecastTable">
+        <thead><tr>
+          <th>Customer</th><th>Team</th><th>Backlog</th><th>Avg weekly pace (jobs)</th>
+          <th>Weeks to clear (current pace)</th><th>Avg hrs/job</th><th>Hours needed</th>
+          <th>Avg weekly hrs capacity</th><th>Avg headcount</th><th>Extra headcount for target</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  <div class="tab-panel" id="tabGantt">
+    <iframe id="ganttFrame" title="Workflow Quality Gantt Dashboard"></iframe>
+  </div>
+</div>
+
+<script type="text/plain" id="ganttSource">
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Quality - Gantt Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f4f0;
+            --panel: rgba(255, 255, 255, 0.92);
+            --border: #e2e0d8;
+            --text: #1c1b19;
+            --muted: #8b8983;
+            --design-a: #6d28d9; --design-b: #9333ea;
+            --check-a: #185fa5;  --check-b: #2f8fd1;
+            --rf-a: #a32d2d;     --rf-b: #c0392b;
+            --grid: rgba(28,27,25,0.05);
+            --grid-bold: rgba(28,27,25,0.12);
+            --accent: #185fa5;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(24,95,165,0.08) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(147,51,234,0.06) 0, transparent 50%);
+            background-attachment: fixed;
+        }
+        .app { max-width: 100%; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+        /* ---- HEADER ---- */
+        .header {
+            background: var(--panel); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 16px;
+            padding: 1.25rem 1.75rem; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 10px 30px -10px rgba(28,27,25,0.12); flex-wrap: wrap; gap: 1rem;
+        }
+        .header h1 {
+            font-size: 1.35rem; font-weight: 800;
+            background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+        .ctrl-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .ctrl-group label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        select, input[type="date"] {
+            background: #ffffff; border: 1px solid var(--border);
+            color: var(--text); padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.8125rem;
+            font-family: 'Inter', sans-serif; outline: none; transition: border 0.2s;
+        }
+        select:focus, input[type="date"]:focus { border-color: var(--accent); }
+        select { min-width: 180px; cursor: pointer; }
+        input[type="date"] { min-width: 140px; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: opacity(0.55); cursor: pointer; }
+        .btn-apply {
+            background: linear-gradient(135deg, var(--accent), var(--design-a)); color: #fff; border: none; 
+            padding: 0.5rem 1.25rem; border-radius: 8px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; 
+            align-self: flex-end; transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn-apply:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(24,95,165,0.3); }
+
+        /* ---- LEGEND ---- */
+        .legend { display: flex; gap: 1.25rem; font-size: 0.8125rem; padding: 0.5rem 0; }
+        .legend-i { display: flex; align-items: center; gap: 0.4rem; }
+        .leg-c { width: 12px; height: 12px; border-radius: 3px; }
+        .c-wait { background: #a8a6a0; } /* Xám cho timeCreated -> timeAccepted */
+        .c-design { background: linear-gradient(135deg, var(--design-a), var(--design-b)); }
+        .c-check { background: linear-gradient(135deg, var(--check-a), var(--check-b)); }
+        .c-rf { background: linear-gradient(135deg, var(--rf-a), var(--rf-b)); }
+        .c-prog { background: repeating-linear-gradient(45deg, rgba(255,255,255,.1), rgba(255,255,255,.1) 4px, transparent 4px, transparent 8px); border: 1px dashed var(--muted); }
+        
+        .leave-bg {
+            position: absolute; top: 0; height: 100%; z-index: 1; pointer-events: none;
+            background: repeating-linear-gradient(45deg, rgba(133,79,11,0.08), rgba(133,79,11,0.08) 10px, rgba(133,79,11,0.15) 10px, rgba(133,79,11,0.15) 20px);
+            border-left: 1px dashed rgba(133,79,11,0.4);
+            border-right: 1px dashed rgba(133,79,11,0.4);
+        }
+        .leg-leave { background: repeating-linear-gradient(45deg, rgba(133,79,11,0.5), rgba(133,79,11,0.5) 4px, rgba(133,79,11,0.8) 4px, rgba(133,79,11,0.8) 8px); border: 1px solid rgba(133,79,11,0.8); }
+
+        /* ---- USER SECTION ---- */
+        .user-section {
+            background: var(--panel); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 14px;
+            overflow: hidden; box-shadow: 0 6px 20px rgba(28,27,25,0.08);
+            margin-bottom: 0.25rem;
+        }
+        .user-header {
+            padding: 0.875rem 1.25rem; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;
+        }
+        .user-header:hover { background: rgba(28,27,25,0.02); }
+        .user-name { font-weight: 700; font-size: 0.9375rem; }
+        .user-badge { font-size: 0.75rem; color: var(--muted); display:flex; gap: 1rem; align-items: center; }
+        
+        .gantt-wrap { overflow: auto; max-height: 550px; position: relative; }
+        .gantt-grid { display: grid; grid-template-columns: 240px 1fr; min-width: 2000px; }
+        
+        /* STICKY HEADER */
+        .g-hdr {
+            background: #f2f1ec; padding: 0.625rem 0.75rem; font-weight: 600; font-size: 0.8125rem;
+            border-bottom: 2px solid var(--grid-bold); position: sticky; top: 0; z-index: 10;
+        }
+        .tl-hdr { height: 54px; padding: 0; position: sticky; top: 0; z-index: 10; }
+        .time-scale { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .date-row { display: flex; flex: 1; border-bottom: 1px solid var(--grid-bold); }
+        .date-block { 
+            border-left: 1px solid var(--grid-bold); display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700; color: var(--text); background: rgba(28,27,25,0.02); 
+        }
+        .time-row { display: flex; flex: 1; }
+        .s-tick {
+            flex: 1 1 0%; min-width: 0; border-left: 1px solid var(--grid-bold); display: flex; align-items: center; justify-content: flex-start;
+            padding-left: 0.25rem; font-size: 0.65rem; color: var(--muted); white-space: nowrap; overflow: hidden;
+        }
+        /* Off-hours and Weekend Highlighting */
+        .off-hours { background: rgba(28, 27, 25, 0.10); }
+        .work-hours { background: rgba(59, 109, 17, 0.07); }
+        .weekend { background: rgba(163, 45, 45, 0.07); border-left: 1px solid rgba(163, 45, 45, 0.3); color: #a32d2d !important; font-weight: 700; }
+        .weekend-text { color: #a32d2d !important; }
+
+        .t-row { display: contents; }
+        .t-row:hover .t-meta, .t-row:hover .tl-lane { background: rgba(28,27,25,0.02); }
+        .t-meta {
+            padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--grid);
+            display: flex; flex-direction: column; gap: 0.2rem; background: #ffffff; transition: background 0.2s;
+        }
+        .id-badge { display: inline-flex; align-items: center; gap: 0.4rem; }
+        .badge { padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.6875rem; font-weight: 700; }
+        .b-design { background: rgba(109,40,217,0.12); color: #6d28d9; border: 1px solid rgba(109,40,217,0.3); }
+        .b-check { background: rgba(24,95,165,0.12); color: #185fa5; border: 1px solid rgba(24,95,165,0.3); }
+        .b-rf { background: rgba(163,45,45,0.12); color: #a32d2d; border: 1px solid rgba(163,45,45,0.3); }
+        .job-ref { font-size: 0.75rem; color: var(--muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+        .t-det { font-size: 0.6875rem; color: var(--muted); display: flex; justify-content: space-between; }
+        
+        .tl-lane {
+            padding: 0.625rem 0; border-bottom: 1px solid var(--grid);
+            position: relative; background: #faf9f6; transition: background 0.2s;
+        }
+        .lane-grid { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; pointer-events: none; }
+        .gl-col { flex: 1 1 0%; min-width: 0; border-left: 1px solid var(--grid); height: 100%; }
+
+        /* Bar structures */
+        .bar-w {
+            position: absolute; height: calc(100% - 1.25rem); top: 0.625rem; min-width: 5px;
+            cursor: pointer; z-index: 2; display: flex; align-items: stretch; border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(28,27,25,0.18); transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .bar-w:hover { transform: scaleY(1.1); box-shadow: 0 4px 18px rgba(24,95,165,0.35); z-index: 5; }
+        
+        .bar-created {
+            background: #a8a6a0;
+            border-radius: 5px 0 0 5px;
+            border-right: 1px dashed rgba(255,255,255,0.5);
+        }
+        .bar-active { border-radius: 0 5px 5px 0; }
+        .only-one-part { border-radius: 5px !important; border-right: none !important; }
+
+        .bar-d { background: linear-gradient(135deg, var(--design-a), var(--design-b)); }
+        .bar-c { background: linear-gradient(135deg, var(--check-a), var(--check-b)); }
+        .bar-r { background: linear-gradient(135deg, var(--rf-a), var(--rf-b)); }
+        
+        .bar-p { position: relative; overflow: hidden; }
+        .bar-p::after {
+            content:''; position: absolute; inset:0;
+            background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem; animation: stripe 1s linear infinite;
+        }
+        @keyframes stripe { 0%{background-position:1rem 0} 100%{background-position:0 0} }
+
+        .tooltip {
+            position: absolute; background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); padding: 0.875rem; border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(28,27,25,0.18); z-index: 200; pointer-events: none;
+            width: 320px; opacity: 0; transition: opacity 0.12s; font-size: 0.75rem;
+        }
+        .tt-title { font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; }
+        .tt-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; }
+        .tt-lbl { color: var(--muted); }
+        .tt-val { font-weight: 500; color: var(--text); text-align: right; }
+
+        .empty-msg { padding: 3rem; text-align: center; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 14px; font-size: 0.9375rem; }
+        .collapse { display: none !important; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1>Workflow Quality - Gantt Dashboard</h1>
+        <div class="controls">
+            <div class="ctrl-group"><label>Team</label><select id="teamFilter"></select></div>
+            <div class="ctrl-group"><label>Từ ngày</label><input type="date" id="startDate" value="2026-07-20"></div>
+            <div class="ctrl-group"><label>Đến ngày</label><input type="date" id="endDate" value="2026-07-26"></div>
+            <button class="btn-apply" onclick="applyFilters()">Lọc dữ liệu</button>
+        </div>
+    </div>
+    <div class="legend">
+        <div class="legend-i"><div class="leg-c c-wait"></div><span>Đợi nhận việc</span></div>
+        <div class="legend-i"><div class="leg-c c-design"></div><span>Design</span></div>
+        <div class="legend-i"><div class="leg-c c-check"></div><span>Check</span></div>
+        <div class="legend-i"><div class="leg-c c-rf"></div><span>Review & Fix</span></div>
+        <div class="legend-i"><div class="leg-c c-prog"></div><span>Đang xử lý</span></div>
+        <div class="legend-i"><div class="leg-c leg-leave"></div><span>Nghỉ phép (Leave)</span></div>
+    </div>
+    <div id="content"></div>
+</div>
+<div class="tooltip" id="tip"></div>
+
+<script>
+const RAW = parent.window.GANTT_RAW || {};
+
+let currentTeam = "";
+let filteredStart = "2026-07-20";
+let filteredEnd   = "2026-07-26";
+
+function getTickClass(tk) {
+    const h = tk.getHours();
+    const isWeekend = tk.getDay() === 0 || tk.getDay() === 6;
+    const isWorkingHour = !isWeekend && (h >= 8 && h < 17);
+    const isOffHourMode = !isWeekend && (h < 8 || h >= 17);
+    
+    let cName = "";
+    if (isWeekend) cName = "weekend";
+    else if (isWorkingHour) cName = "work-hours";
+    else if (isOffHourMode) cName = "off-hours";
+    return cName;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const sel = document.getElementById("teamFilter");
+    const teams = Object.keys(RAW).sort();
+    teams.forEach(t => {
+        const o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o);
+    });
+    if (teams.length) { currentTeam = teams[0]; sel.value = currentTeam; }
+    
+    if (parent.window.GANTT_DATES) {
+        document.getElementById('startDate').value = parent.window.GANTT_DATES.start;
+        document.getElementById('endDate').value = parent.window.GANTT_DATES.end;
+    }
+    applyFilters();
+});
+
+function applyFilters() {
+    currentTeam = document.getElementById("teamFilter").value;
+    filteredStart = document.getElementById("startDate").value;
+    filteredEnd   = document.getElementById("endDate").value;
+    renderTeam();
+}
+
+function renderTeam() {
+    const container = document.getElementById("content");
+    const tip = document.getElementById("tip");
+    container.innerHTML = "";
+
+    const teamData = RAW[currentTeam];
+    if (!teamData || Object.keys(teamData).length === 0) {
+        container.innerHTML = '<div class="empty-msg">Không có dữ liệu cho Team này trong khoảng thời gian đã chọn.</div>';
+        return;
+    }
+
+    const fs = new Date(filteredStart + "T00:00:00");
+    const fe = new Date(filteredEnd   + "T23:59:59");
+
+    const userNames = Object.keys(teamData).sort();
+    userNames.forEach(userName => {
+        const userData = teamData[userName];
+        const allRows = userData.tasks || [];
+        const allLeaves = userData.leaves || [];
+        
+        const rows = allRows.filter(r => {
+            const c = new Date(r.created);
+            const a = new Date(r.start);
+            const e = new Date(r.end);
+            return (c >= fs && c <= fe) || (a >= fs && a <= fe) || (e >= fs && e <= fe) || (c < fs && e > fe);
+        });
+        
+        const leaves = allLeaves.filter(l => {
+            const s = new Date(l.start);
+            const e = new Date(l.end);
+            return (s >= fs && s <= fe) || (e >= fs && e <= fe) || (s < fs && e > fe);
+        });
+        
+        if (rows.length === 0 && leaves.length === 0) return;
+
+        let dynamicAttHrs = 0;
+        let dynamicActualAttHrs = 0;
+        if (userData.attendance) {
+            userData.attendance.forEach(a => {
+                const aDate = new Date(a.date);
+                if (aDate >= fs && aDate <= fe) {
+                    dynamicAttHrs += a.hrs;
+                    dynamicActualAttHrs += (a.actual_hrs || 0);
+                }
+            });
+        }
+        
+        let dynamicIntraHrs = 0;
+        rows.forEach(r => {
+            dynamicIntraHrs += (r.investedHrs || 0);
+        });
+        
+        let dynamicUtil = "N/A";
+        if (dynamicActualAttHrs > 0) {
+            dynamicUtil = (dynamicIntraHrs / dynamicActualAttHrs * 100).toFixed(1) + "%";
+        } else if (dynamicIntraHrs > 0) {
+            dynamicUtil = "100.0%"; // Or some other fallback if actual hours are 0 but time was invested
+        }
+
+        const section = document.createElement("div"); section.className = "user-section";
+        const header = document.createElement("div"); header.className = "user-header";
+        
+        let utilStr = "";
+        if (dynamicUtil !== "N/A") {
+            utilStr = `<span style="color:#3b6d11;font-weight:600">Util: ${dynamicUtil}</span>`;
+        }
+        
+        header.innerHTML = `<span class="user-name">${userData.name}</span>
+            <span class="user-badge">${utilStr} <span>Standard Working Hour: ${dynamicAttHrs.toFixed(1)}h</span> <span>Actual Attended Hour: ${dynamicActualAttHrs.toFixed(1)}h</span> <span>Intraweek Invested: ${dynamicIntraHrs.toFixed(1)}h</span> <span>Tasks: ${rows.length}</span></span>`;
+
+        const body = document.createElement("div"); body.className = "gantt-wrap";
+        header.addEventListener("click", () => { body.classList.toggle("collapse"); });
+
+        const grid = document.createElement("div"); grid.className = "gantt-grid";
+
+        const parsed = rows.map(r => ({ ...r, c: new Date(r.created), a: new Date(r.start), e: new Date(r.end) }));
+        
+        let minT = new Date(fs);
+        let maxT = new Date(fe);
+        
+        const totalDur = maxT.getTime() - minT.getTime();
+
+        let ticks = [];
+        let c = new Date(minT); c.setHours(0,0,0,0);
+        while (c <= maxT) {
+            ticks.push(new Date(c));
+            c.setHours(c.getHours() + 2); 
+        }
+        ticks.push(new Date(c)); 
+
+        const hdr1 = document.createElement("div"); hdr1.className = "g-hdr"; hdr1.textContent = "Task";
+        const hdr2 = document.createElement("div"); hdr2.className = "g-hdr tl-hdr";
+        const scaleWrap = document.createElement("div"); scaleWrap.className = "time-scale";
+        
+        const dateRow = document.createElement("div"); dateRow.className = "date-row";
+        const timeRow = document.createElement("div"); timeRow.className = "time-row";
+        
+        let currentDayStr = "";
+        let currentDayCount = 0;
+        let currentDayDiv = null;
+
+        ticks.forEach((tk, idx) => {
+            if (idx === ticks.length - 1) return;
+            
+            const el = document.createElement("div"); 
+            let cName = "s-tick " + getTickClass(tk);
+            
+            el.className = cName.trim();
+            el.textContent = tk.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',hour12:false});
+            timeRow.appendChild(el);
+            
+            const dateStr = tk.toLocaleDateString([], {month:'short', day:'numeric', weekday: 'short'});
+            if (dateStr !== currentDayStr) {
+                if (currentDayDiv) {
+                    currentDayDiv.style.flex = currentDayCount;
+                }
+                currentDayStr = dateStr;
+                currentDayCount = 1;
+                currentDayDiv = document.createElement("div");
+                let dcName = "date-block";
+                if (tk.getDay() === 0 || tk.getDay() === 6) dcName += " weekend-text";
+                currentDayDiv.className = dcName;
+                currentDayDiv.textContent = dateStr;
+                dateRow.appendChild(currentDayDiv);
+            } else {
+                currentDayCount++;
+            }
+        });
+        if (currentDayDiv) {
+            currentDayDiv.style.flex = currentDayCount;
+        }
+        
+        scaleWrap.appendChild(dateRow);
+        scaleWrap.appendChild(timeRow);
+        
+        hdr2.appendChild(scaleWrap);
+        grid.appendChild(hdr1); grid.appendChild(hdr2);
+        
+        let leaveHtml = "";
+        leaves.forEach(l => {
+            let ls = new Date(l.start);
+            let le = new Date(l.end);
+            
+            if (ls.getHours() === 12 && ls.getMinutes() === 0) {
+                ls.setHours(13);
+            }
+            if (le.getHours() === 17 && le.getMinutes() === 0) {
+                le.setHours(18);
+            }
+            
+            const clampTime = t => Math.max(minT.getTime(), Math.min(maxT.getTime(), t.getTime()));
+            const lStart = clampTime(ls);
+            const lEnd = clampTime(le);
+            
+            const lLeft = ((lStart - minT.getTime()) / totalDur) * 100;
+            const lWidth = ((lEnd - lStart) / totalDur) * 100;
+            if (lWidth > 0) {
+                leaveHtml += `<div class="leave-bg" style="left:${lLeft}%; width:${lWidth}%" title="Nghỉ phép: ${l.type}"></div>`;
+            }
+        });
+        
+        if (parsed.length === 0) {
+            const row = document.createElement("div"); row.className = `t-row`;
+            const meta = document.createElement("div"); meta.className = "t-meta";
+            meta.innerHTML = `<div class="job-ref" style="color:var(--muted);padding: 0.625rem 0.75rem;">Không có Tasks</div>`;
+            
+            const lane = document.createElement("div"); lane.className = "tl-lane";
+            const lg = document.createElement("div"); lg.className = "lane-grid";
+            ticks.forEach((tk, idx) => {
+                if (idx === ticks.length - 1) return;
+                const l = document.createElement("div");
+                let cName = "gl-col " + getTickClass(tk);
+                l.className = cName.trim();
+                lg.appendChild(l);
+            });
+            lg.innerHTML += leaveHtml;
+            lane.appendChild(lg);
+            row.appendChild(meta); row.appendChild(lane);
+            grid.appendChild(row);
+        }
+
+        // Draw rows
+        parsed.forEach(task => {
+            const clampTime = t => Math.max(minT.getTime(), Math.min(maxT.getTime(), t.getTime()));
+            
+            const cT = clampTime(task.c);
+            let aT = clampTime(task.a);
+            const eT = clampTime(task.e);
+            
+            if (isNaN(aT)) aT = eT;
+            
+            const fullLeft = ((cT - minT.getTime()) / totalDur) * 100;
+            const fullWidth = ((eT - cT) / totalDur) * 100;
+            
+            const createdDur = aT - cT;
+            const activeDur = eT - aT;
+            const totalBarDur = createdDur + activeDur;
+            
+            const createdPct = totalBarDur > 0 ? (createdDur / totalBarDur) * 100 : 0;
+            const activePct = totalBarDur > 0 ? (activeDur / totalBarDur) * 100 : 100;
+
+            let catClass = "check"; let catCode = "c";
+            if (task.cat === "Design") { catClass = "design"; catCode = "d"; }
+            else if (task.cat === "Review & Fix") { catClass = "rf"; catCode = "r"; }
+
+            const row = document.createElement("div"); row.className = `t-row`;
+            const meta = document.createElement("div"); meta.className = "t-meta";
+
+            const ib = document.createElement("div"); ib.className = "id-badge";
+            let jobStr = task.jobRef;
+            if (task.parentJobRef && task.parentJobRef !== "nan" && task.parentJobRef !== "null" && task.parentJobRef !== "") {
+                jobStr += ` - ${task.parentJobRef}`;
+            }
+            ib.innerHTML = `<span class="badge b-${catClass}">${task.taskId}</span><span class="job-ref" title="${jobStr}">${jobStr}</span>`;
+            meta.appendChild(ib);
+            meta.innerHTML += `<div class="t-det"><span>Invested: ${task.investedTime}</span></div>`;
+
+            const lane = document.createElement("div"); lane.className = "tl-lane";
+            const lg = document.createElement("div"); lg.className = "lane-grid";
+            ticks.forEach((tk, idx) => {
+                if (idx === ticks.length - 1) return;
+                const l = document.createElement("div");
+                let cName = "gl-col " + getTickClass(tk);
+                l.className = cName.trim();
+                lg.appendChild(l);
+            });
+            lg.innerHTML += leaveHtml;
+            lane.appendChild(lg);
+
+            if (fullWidth > 0) {
+                const bw = document.createElement("div"); bw.className = "bar-w";
+                bw.style.left = `${fullLeft}%`; bw.style.width = `${Math.max(fullWidth, 0.5)}%`;
+
+                if (createdPct > 0) {
+                    const cb = document.createElement("div"); cb.className = "bar-created" + (activePct === 0 ? " only-one-part" : "");
+                    cb.style.width = `${createdPct}%`; bw.appendChild(cb);
+                }
+                if (activePct > 0) {
+                    const ab = document.createElement("div"); 
+                    ab.className = `bar-active bar-${catCode}` + (createdPct === 0 ? " only-one-part" : "");
+                    if (task.inProgress) ab.className += " bar-p";
+                    ab.style.width = `${activePct}%`; bw.appendChild(ab);
+                }
+                
+                bw.addEventListener("mousemove", e => {
+                    tip.style.opacity = 1;
+                    let lw = e.pageX + 15; if (lw + 320 > window.innerWidth) lw -= 350;
+                    tip.style.left = lw + "px"; tip.style.top = (e.pageY + 15) + "px";
+                    const fmt = d => isNaN(d) ? '-' : d.toLocaleDateString([],{month:'short',day:'numeric'}) + " " + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
+                    const ageDays = Math.floor((new Date().getTime() - task.c.getTime()) / 86400000);
+                    
+                    tip.innerHTML = `
+                        <div class="tt-title"><span>${task.taskId} &middot; ${task.jobRef}</span><span class="badge b-${catClass}">${task.cat}</span></div>
+                        <div class="tt-row"><span class="tt-lbl">Created:</span><span class="tt-val">${fmt(task.c)}</span></div>
+                        <div class="tt-row"><span class="tt-lbl">Accepted:</span><span class="tt-val">${fmt(task.a)}</span></div>
+                        <div class="tt-row"><span class="tt-lbl">Outcome:</span><span class="tt-val">${task.inProgress ? task.status : fmt(task.e)}</span></div>
+                        <div class="tt-row"><span class="tt-lbl">Task Aging:</span><span class="tt-val">${ageDays}d</span></div>
+                        <div class="tt-row" style="border-top:1px solid rgba(28,27,25,.08);padding-top:.4rem;margin-top:.2rem">
+                            <span class="tt-lbl">Invested Time:</span><span class="tt-val">${task.investedTime}</span>
+                        </div>`;
+                });
+                bw.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+                lane.appendChild(bw);
+            }
+
+            row.appendChild(meta); row.appendChild(lane); grid.appendChild(row);
+        });
+
+        body.appendChild(grid); section.appendChild(header); section.appendChild(body); container.appendChild(section);
+    });
+}
+<\/script>
+
+</script>
+
+</script>
+</body>
+</html>
+</script>
+
+<script src="references/dashdata.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const DATA = window.DASH_DATA;
+
+// Weekly expected output per customer (from ops targets). metric: 'jobs' or 'layouts'.
+const CUSTOMER_TARGETS = window.CUSTOMER_TARGETS || {};
+const fmt = new Intl.NumberFormat('en-US');
+const fmt1 = (n) => (Math.round(n*10)/10).toLocaleString('en-US');
+const fmtz = (n) => (n===null || n===undefined || Math.round(n)===0) ? '-' : fmt.format(n);
+const fmt1z = (n) => (n===null || n===undefined || Math.round(n*10)/10===0) ? '-' : fmt1(n);
+
+function weekLabel(w){
+  const start = new Date(w+'T00:00:00');
+  const end = new Date(start.getTime()+6*86400000);
+  const opt = {month:'short', day:'numeric'};
+  return start.toLocaleDateString('en-US',opt) + ' - ' + end.toLocaleDateString('en-US',opt) + ', ' + start.getFullYear();
+}
+
+const weekSel = document.getElementById('weekSel');
+const teamSel = document.getElementById('teamSel');
+const custSel = document.getElementById('custSel');
+
+DATA.weeks.forEach(w=>{
+  const o = document.createElement('option');
+  o.value = w; o.textContent = weekLabel(w);
+  weekSel.appendChild(o);
+});
+weekSel.value = DATA.weeks[DATA.weeks.length-1];
+
+function populateTeams(){
+  teamSel.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = 'all'; optAll.textContent = 'All teams';
+  teamSel.appendChild(optAll);
+  DATA.teams.forEach(t=>{
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    teamSel.appendChild(o);
+  });
+}
+populateTeams();
+
+function customersForTeam(team){
+  const set = new Set();
+  DATA.customer_weekly.forEach(r=>{
+    if(team==='all' || r.Team===team) set.add(r.Customer);
+  });
+  return Array.from(set).sort();
+}
+
+function populateCustomers(){
+  const team = teamSel.value;
+  const cur = custSel.value;
+  custSel.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = 'all'; optAll.textContent = 'All customers';
+  custSel.appendChild(optAll);
+  customersForTeam(team).forEach(c=>{
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    custSel.appendChild(o);
+  });
+  if(Array.from(custSel.options).some(o=>o.value===cur)) custSel.value = cur;
+  else custSel.value = 'all';
+}
+populateCustomers();
+
+let trendChart=null, ltChart=null, passthroughChart=null, scatterChart=null, byCustomerChart=null, reworkChart=null, agingChart=null, forecastChart=null;
+let scatterScope = 'week';
+let targetWeeks = 2;
+
+function currentFilters(){
+  return { week: weekSel.value, team: teamSel.value, cust: custSel.value };
+}
+
+function matchesRow(r, f, useWeek){
+  if(useWeek && r.Week !== f.week) return false;
+  if(f.team!=='all' && r.Team!==f.team) return false;
+  if(f.cust!=='all' && r.Customer!==f.cust) return false;
+  return true;
+}
+
+function render(){
+  const f = currentFilters();
+  document.getElementById('subtitle').textContent =
+    'Week of ' + weekLabel(f.week) + (f.team!=='all' ? ' · Team: '+f.team : ' · All teams') + (f.cust!=='all' ? ' · Customer: '+f.cust : '');
+
+  const weekRows = DATA.customer_weekly.filter(r=>matchesRow(r,f,true));
+  const jobs = weekRows.reduce((s,r)=>s+r.jobs,0);
+  const layouts = weekRows.reduce((s,r)=>s+r.layouts,0);
+  const units = weekRows.reduce((s,r)=>s+r.units,0);
+  const sqm = weekRows.reduce((s,r)=>s+r.sqm,0);
+  const avgSqm = jobs>0 ? sqm/jobs : 0;
+
+  const kpis = document.getElementById('kpis');
+  kpis.innerHTML = `
+    <div class="kpi"><div class="lab">Jobs completed</div><div class="val blue">${fmtz(jobs)}</div></div>
+    <div class="kpi"><div class="lab">Layouts</div><div class="val">${fmtz(layouts)}</div></div>
+    <div class="kpi"><div class="lab">Dwelling units</div><div class="val">${fmtz(units)}</div></div>
+    <div class="kpi"><div class="lab">Sqm designed</div><div class="val">${fmtz(Math.round(sqm))}</div></div>
+    <div class="kpi"><div class="lab">Avg sqm / job</div><div class="val">${fmt1z(avgSqm)}</div></div>
+  `;
+
+  const wIdx = DATA.weeks.indexOf(f.week);
+  const kpiInsightEl = document.getElementById('kpiInsight');
+  if(wIdx>0){
+    const prevWeek = DATA.weeks[wIdx-1];
+    const prevJobs = DATA.customer_weekly.filter(r=>matchesRow(r,{...f,week:prevWeek},true)).reduce((s,r)=>s+r.jobs,0);
+    if(prevJobs>0){
+      const delta = jobs - prevJobs;
+      const pct = Math.round(Math.abs(delta)/prevJobs*100);
+      const dir = delta>0 ? 'up' : delta<0 ? 'down' : 'flat vs';
+      kpiInsightEl.innerHTML = `<span><b>Key takeaway:</b> jobs completed this week are ${dir}${delta!==0?' '+pct+'%':''} ${delta!==0?'from':'with'} last week (${fmtz(prevJobs)} → ${fmtz(jobs)}).</span>`;
+    } else {
+      kpiInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${fmtz(jobs)} jobs completed this week; no comparable prior-week baseline for this filter.</span>`;
+    }
+  } else {
+    kpiInsightEl.innerHTML = '';
+  }
+
+  // trend chart: jobs completed by week, stacked by Project_type
+  const PT_COLORS = {'Amd.':'#2a78d6','Est.':'#1baf7a','Det.':'#eda100','Training':'#8b8983','Other':'#e34948'};
+  const ptSet = new Set();
+  const byWeekPT = {};
+  DATA.weeks.forEach(w=>byWeekPT[w]={});
+  DATA.jobtype_weekly.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    ptSet.add(r.ProjectType);
+    byWeekPT[r.Week][r.ProjectType] = (byWeekPT[r.Week][r.ProjectType]||0) + r.jobs;
+  });
+  const ptOrder = ['Amd.','Est.','Det.','Training','Other'].filter(pt=>ptSet.has(pt));
+  const labels = DATA.weeks.map(weekLabel);
+
+  document.getElementById('trendTitle').textContent = 'Weekly trend — jobs completed decomposition by project type' + (f.team!=='all'?' · '+f.team:'') + (f.cust!=='all'?' · '+f.cust:'');
+  document.getElementById('trendLegend').innerHTML = ptOrder.map(pt=>`
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${PT_COLORS[pt]};"></span>${pt}</span>
+  `).join('');
+
+  const ptTotals = ptOrder.map(pt=>({ pt, total: DATA.weeks.reduce((s,w)=>s+(byWeekPT[w][pt]||0),0) }));
+  const grandTotal = ptTotals.reduce((s,o)=>s+o.total,0);
+  const trendInsightEl = document.getElementById('trendInsight');
+  if(grandTotal>0){
+    const top = ptTotals.reduce((a,b)=> a.total>=b.total ? a : b);
+    const pct = Math.round(top.total/grandTotal*100);
+    trendInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${top.pt} work dominates completed jobs across this window (${pct}% of ${fmtz(grandTotal)} jobs).</span>`;
+  } else {
+    trendInsightEl.innerHTML = '';
+  }
+
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type:'bar',
+    data:{ labels, datasets: ptOrder.map(pt=>({
+      label: pt,
+      data: DATA.weeks.map(w=>byWeekPT[w][pt]||0),
+      backgroundColor: PT_COLORS[pt],
+      borderRadius: 4
+    })) },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ beginAtZero:true, stacked:true, grid:{color:'#e1e0d9'} },
+        x:{ stacked:true, grid:{display:false}, ticks:{maxRotation:0, font:{size:12}} }
+      }
+    }
+  });
+
+  renderPassthroughChart(f);
+  renderByCustomerChart(f);
+  renderScatterChart(f);
+  renderReworkChart(f);
+  renderAgingChart(f);
+  renderForecast(f);
+  renderSummaryTable(f);
+
+  // customer table for selected week (+team filter, not customer filter so table stays useful)
+  const custMap = {};
+  DATA.customer_weekly.forEach(r=>{
+    if(r.Week!==f.week) return;
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    const key = r.Customer;
+    if(!custMap[key]) custMap[key] = {Customer:r.Customer, Team:r.Team, jobs:0, layouts:0, units:0, sqm:0};
+    custMap[key].jobs += r.jobs; custMap[key].layouts += r.layouts;
+    custMap[key].units += r.units; custMap[key].sqm += r.sqm;
+    if(custMap[key].Team!==r.Team) custMap[key].Team = 'Multiple';
+  });
+  const custRows = Object.values(custMap).filter(r=>r.jobs>0||r.layouts>0||r.sqm>0).sort((a,b)=>b.jobs-a.jobs);
+  document.getElementById('custTableTitle').textContent = 'Output by customer — ' + weekLabel(f.week);
+  const custBody = document.querySelector('#custTable tbody');
+  custBody.innerHTML = custRows.length ? custRows.map(r=>{
+    const t = CUSTOMER_TARGETS[r.Customer];
+    let expectedCell, achievedCell;
+    if(!t){
+      expectedCell = 'N/A';
+      achievedCell = '<span class="badge badge-na">N/A</span>';
+    } else {
+      const actual = t.metric==='layouts' ? r.layouts : r.jobs;
+      expectedCell = fmt.format(t.target) + ' ' + t.metric + '/wk';
+      achievedCell = actual >= t.target
+        ? `<span class="badge badge-yes">Achieved</span>`
+        : `<span class="badge badge-no">Not achieved</span>`;
+    }
+    return `
+    <tr>
+      <td>${r.Customer}</td>
+      <td><span class="team-tag">${r.Team}</span></td>
+      <td>${fmtz(r.jobs)}</td>
+      <td>${fmtz(r.layouts)}</td>
+      <td>${fmtz(r.units)}</td>
+      <td>${fmtz(Math.round(r.sqm))}</td>
+      <td>${fmt1z(r.jobs>0?r.sqm/r.jobs:0)}</td>
+      <td>${expectedCell}</td>
+      <td>${achievedCell}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="empty">No output this week for this filter.</td></tr>';
+
+  const trackedRows = custRows.filter(r=>CUSTOMER_TARGETS[r.Customer]);
+  const custInsightEl = document.getElementById('custTableInsight');
+  if(trackedRows.length){
+    const notAchieved = trackedRows.filter(r=>{
+      const t = CUSTOMER_TARGETS[r.Customer];
+      const actual = t.metric==='layouts' ? r.layouts : r.jobs;
+      return actual < t.target;
+    });
+    custInsightEl.innerHTML = notAchieved.length===0
+      ? `<span><b>Key takeaway:</b> all ${trackedRows.length} customers with a weekly target hit it this week.</span>`
+      : `<span><b>Key takeaway:</b> ${notAchieved.length} of ${trackedRows.length} tracked customers missed their weekly target (${notAchieved.map(r=>r.Customer).join(', ')}).</span>`;
+  } else {
+    custInsightEl.innerHTML = '';
+  }
+
+  // leadtime chart by customer for selected week
+  const ltMap = {};
+  DATA.leadtime_weekly.forEach(r=>{
+    if(r.Week!==f.week) return;
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!ltMap[r.Customer]) ltMap[r.Customer] = {sum:0,n:0};
+    ltMap[r.Customer].sum += r.avg_leadtime*r.n;
+    ltMap[r.Customer].n += r.n;
+  });
+  const ltEntries = Object.entries(ltMap).map(([c,v])=>({c, avg: v.n>0?v.sum/v.n:0, n:v.n})).sort((a,b)=>b.avg-a.avg);
+  document.getElementById('ltTitle').textContent = 'Avg leadtime by customer — ' + weekLabel(f.week);
+  if(ltChart) ltChart.destroy();
+  ltChart = new Chart(document.getElementById('ltChart'), {
+    type:'bar',
+    data:{ labels: ltEntries.map(e=>e.c), datasets:[{label:'Avg leadtime (days)', data: ltEntries.map(e=>Math.round(e.avg*100)/100), backgroundColor:'#1baf7a', borderRadius:4}] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ x:{ beginAtZero:true, grid:{color:'#e1e0d9'} }, y:{ grid:{display:false}, ticks:{font:{size:12.5}} } }
+    }
+  });
+
+  // employee table for selected week
+  const empRows = DATA.employee_weekly.filter(r=>matchesRow(r,f,true) && (r.design_tasks>0||r.check_tasks>0||r.layouts>0));
+  empRows.sort((a,b)=> a.Team.localeCompare(b.Team) || b.layouts-a.layouts);
+  document.getElementById('empTableTitle').textContent = 'Output by employee — ' + weekLabel(f.week);
+
+  const reworkByEmp = {};
+  DATA.rework_employee_weekly.forEach(r=>{
+    reworkByEmp[r.Week+'|'+r.Employee+'|'+r.Team+'|'+r.Customer] = r.reviewfix_tasks;
+  });
+
+  const empBody = document.querySelector('#empTable tbody');
+  empBody.innerHTML = empRows.length ? empRows.map(r=>{
+    const rf = reworkByEmp[r.Week+'|'+r.Employee+'|'+r.Team+'|'+r.Customer] || 0;
+    const rate = r.design_tasks>0 ? (rf/r.design_tasks*100) : null;
+    return `
+    <tr>
+      <td>${r.Employee}</td>
+      <td><span class="team-tag">${r.Team}</span></td>
+      <td>${r.Customer}</td>
+      <td>${fmtz(r.design_tasks)}</td>
+      <td>${fmtz(r.check_tasks)}</td>
+      <td>${fmtz(rf)}</td>
+      <td>${rate===null ? '-' : fmt1z(rate)+(rate===0?'':'%')}</td>
+      <td>${fmtz(r.layouts)}</td>
+      <td>${fmtz(r.units)}</td>
+      <td>${fmtz(Math.round(r.sqm))}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="10" class="empty">No employee output this week for this filter.</td></tr>';
+}
+
+function renderPassthroughChart(f){
+  document.getElementById('passthroughTitle').textContent = 'Weekly trend - jobs pass through' + (f.team!=='all'?' · '+f.team:'') + (f.cust!=='all'?' · '+f.cust:'');
+
+  const recentWeeks = DATA.weeks.slice(-8);
+
+  const byWeek = {};
+  recentWeeks.forEach(w=>byWeek[w]={sent:0, intra:0, pass:0, backlog:0});
+  DATA.passthrough_weekly.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!byWeek[r.Week]) return;
+    byWeek[r.Week].sent += r.jobs_sent;
+    byWeek[r.Week].intra += r.intra_week;
+    byWeek[r.Week].pass += r.pass_week;
+    byWeek[r.Week].backlog += r.backlog;
+  });
+  const labels = recentWeeks.map(weekLabel);
+
+  // insight: is the team sending more jobs than it's completing (backlog building) over the window?
+  const totalSent = recentWeeks.reduce((s,w)=>s+byWeek[w].sent,0);
+  const totalComplete = recentWeeks.reduce((s,w)=>s+byWeek[w].intra+byWeek[w].pass,0);
+  const gap = totalSent - totalComplete;
+  const insightEl = document.getElementById('passthroughInsight');
+  if(totalSent>0 || totalComplete>0){
+    const verb = gap>0 ? 'outpacing completions by' : gap<0 ? 'trailing completions by' : 'matching completions,';
+    insightEl.innerHTML = gap===0
+      ? `<span><b>Key takeaway:</b> jobs sent and completed are running roughly in balance over the last ${recentWeeks.length} weeks (${fmtz(totalSent)} vs ${fmtz(totalComplete)}).</span>`
+      : `<span><b>Key takeaway:</b> jobs sent are ${verb} ${fmtz(Math.abs(gap))} over the last ${recentWeeks.length} weeks (${fmtz(totalSent)} sent vs ${fmtz(totalComplete)} completed)${gap>0?' — backlog pressure is building.':'.'}</span>`;
+  } else {
+    insightEl.innerHTML = '';
+  }
+
+  // Backlog is a current-status snapshot, not historical — only meaningful for the newest week.
+  const latestWeek = recentWeeks[recentWeeks.length-1];
+  const backlogSeries = recentWeeks.map(w => w===latestWeek ? byWeek[w].backlog : null);
+
+  const ptDatasets = [
+    { label:'Job sent', data: recentWeeks.map(w=>byWeek[w].sent), backgroundColor:'#2a78d6', borderRadius:3 },
+    { label:'Job complete — intra-week', data: recentWeeks.map(w=>byWeek[w].intra), backgroundColor:'#1baf7a', stack:'complete', borderRadius:3 },
+    { label:'Job complete — pass-week', data: recentWeeks.map(w=>byWeek[w].pass), backgroundColor:'#8fd4b8', stack:'complete', borderRadius:3 },
+    { label:'Job backlog (current, as of latest week only)', data: backlogSeries, backgroundColor:'#e34948', borderRadius:3 }
+  ];
+
+  if(passthroughChart) passthroughChart.destroy();
+  passthroughChart = new Chart(document.getElementById('passthroughChart'), {
+    type:'bar',
+    data:{ labels, datasets: ptDatasets },
+    options:{ indexAxis:'x', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{ footer: (items)=>{
+          const w = recentWeeks[items[0].dataIndex];
+          const d = byWeek[w];
+          return 'Total complete: ' + (d.intra+d.pass);
+        } } }
+      },
+      scales:{
+        y:{ beginAtZero:true, grid:{color:'#e1e0d9'} },
+        x:{ grid:{display:false}, ticks:{font:{size:12.5}} }
+      }
+    }
+  });
+
+  // Custom clickable legend: click toggles that series on/off; the chart re-highlights accordingly.
+  const legendEl = document.getElementById('passthroughLegend');
+  legendEl.innerHTML = ptDatasets.map((ds,i)=>`
+    <span class="legend-chip" data-index="${i}">
+      <span class="swatch" style="background:${ds.backgroundColor};"></span>${ds.label}
+    </span>
+  `).join('');
+  legendEl.querySelectorAll('.legend-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const i = parseInt(chip.dataset.index, 10);
+      const meta = passthroughChart.getDatasetMeta(i);
+      meta.hidden = meta.hidden === null ? !passthroughChart.data.datasets[i].hidden : !meta.hidden;
+      chip.classList.toggle('chip-off', !!meta.hidden);
+      passthroughChart.update();
+    });
+  });
+}
+
+
+function renderByCustomerChart(f){
+  document.getElementById('byCustomerTitle').textContent = 'Job weekly by customer — ' + weekLabel(f.week) + (f.team!=='all'?' · '+f.team:'');
+
+  const byCust = {};
+  DATA.passthrough_weekly.forEach(r=>{
+    if(r.Week!==f.week) return;
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!byCust[r.Customer]) byCust[r.Customer] = {sent:0, intra:0, pass:0, backlog:0};
+    byCust[r.Customer].sent += r.jobs_sent;
+    byCust[r.Customer].intra += r.intra_week;
+    byCust[r.Customer].pass += r.pass_week;
+    byCust[r.Customer].backlog += r.backlog;
+  });
+
+  // Backlog is a current-status snapshot — only meaningful when the selected week is the newest week.
+  const latestWeek = DATA.weeks[DATA.weeks.length-1];
+  const showBacklog = f.week === latestWeek;
+
+  document.getElementById('byCustomerSub').textContent = showBacklog
+    ? 'Sorted by backlog (highest first) — top of the list is scrollable to see further customers.'
+    : 'Backlog only applies to the newest week, so this view is sorted by jobs sent instead.';
+
+  const custList = Object.keys(byCust)
+    .filter(c => byCust[c].sent>0 || byCust[c].intra>0 || byCust[c].pass>0 || byCust[c].backlog>0)
+    .sort((a,b)=> showBacklog ? (byCust[b].backlog - byCust[a].backlog) : (byCust[b].sent - byCust[a].sent));
+
+  const wrap = document.getElementById('byCustomerWrap');
+  wrap.style.height = Math.max(220, custList.length*42 + 60) + 'px';
+
+  const insightEl = document.getElementById('byCustomerInsight');
+  if(custList.length){
+    const top = custList[0];
+    if(showBacklog && byCust[top].backlog>0){
+      const shareOfTotal = custList.reduce((s,c)=>s+byCust[c].backlog,0);
+      const pct = shareOfTotal>0 ? Math.round(byCust[top].backlog/shareOfTotal*100) : 0;
+      insightEl.innerHTML = `<span><b>Key takeaway:</b> ${top} holds the largest backlog this week (${fmtz(byCust[top].backlog)} jobs, ~${pct}% of the filtered total).</span>`;
+    } else {
+      insightEl.innerHTML = `<span><b>Key takeaway:</b> ${top} sent the most jobs this week (${fmtz(byCust[top].sent)}).</span>`;
+    }
+  } else {
+    insightEl.innerHTML = '';
+  }
+
+  if(byCustomerChart) byCustomerChart.destroy();
+
+  const ctx = document.getElementById('byCustomerChart');
+  const legendEl = document.getElementById('byCustomerLegend');
+  if(!custList.length){
+    byCustomerChart = null;
+    legendEl.innerHTML = '';
+    wrap.querySelectorAll('.empty').forEach(e=>e.remove());
+    const msg = document.createElement('div');
+    msg.className='empty';
+    msg.textContent='No job activity this week for this filter.';
+    wrap.appendChild(msg);
+    return;
+  } else {
+    wrap.querySelectorAll('.empty').forEach(e=>e.remove());
+  }
+
+  const bcDatasets = [
+    { label:'Job sent', data: custList.map(c=>byCust[c].sent), backgroundColor:'#2a78d6', borderRadius:3 },
+    { label:'Job complete — intra-week', data: custList.map(c=>byCust[c].intra), backgroundColor:'#1baf7a', stack:'complete', borderRadius:3 },
+    { label:'Job complete — pass-week', data: custList.map(c=>byCust[c].pass), backgroundColor:'#8fd4b8', stack:'complete', borderRadius:3 },
+    { label:'Job backlog' + (showBacklog?'':' (only shown for newest week)'), data: custList.map(c=> showBacklog ? byCust[c].backlog : null), backgroundColor:'#e34948', borderRadius:3 }
+  ];
+
+  byCustomerChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: custList, datasets: bcDatasets },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{ footer: (items)=>{
+          const c = custList[items[0].dataIndex];
+          const d = byCust[c];
+          return 'Total complete: ' + (d.intra+d.pass);
+        } } }
+      },
+      scales:{
+        x:{ beginAtZero:true, grid:{color:'#e1e0d9'} },
+        y:{ grid:{display:false}, ticks:{font:{size:12.5}} }
+      }
+    }
+  });
+
+  legendEl.innerHTML = bcDatasets.map((ds,i)=>`
+    <span class="legend-chip" data-index="${i}">
+      <span class="swatch" style="background:${ds.backgroundColor};"></span>${ds.label}
+    </span>
+  `).join('');
+  legendEl.querySelectorAll('.legend-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const i = parseInt(chip.dataset.index, 10);
+      const meta = byCustomerChart.getDatasetMeta(i);
+      meta.hidden = meta.hidden === null ? !byCustomerChart.data.datasets[i].hidden : !meta.hidden;
+      chip.classList.toggle('chip-off', !!meta.hidden);
+      byCustomerChart.update();
+    });
+  });
+}
+
+function renderReworkChart(f){
+  document.getElementById('reworkTitle').textContent = 'Rework rate by team — ' + weekLabel(f.week) + (f.cust!=='all'?' · '+f.cust:'');
+
+  const byTeam = {};
+  DATA.rework_team_weekly.forEach(r=>{
+    if(r.Week!==f.week) return;
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!byTeam[r.Team]) byTeam[r.Team] = {design:0, rf:0};
+    byTeam[r.Team].design += r.design_tasks;
+    byTeam[r.Team].rf += r.reviewfix_tasks;
+  });
+  const teamList = Object.keys(byTeam).filter(t=>byTeam[t].design>0 || byTeam[t].rf>0)
+    .sort((a,b)=> (byTeam[b].design>0?byTeam[b].rf/byTeam[b].design:0) - (byTeam[a].design>0?byTeam[a].rf/byTeam[a].design:0));
+
+  const reworkInsightEl = document.getElementById('reworkInsight');
+  if(teamList.length){
+    const top = teamList[0];
+    const topRate = byTeam[top].design>0 ? Math.round(byTeam[top].rf/byTeam[top].design*1000)/10 : 0;
+    reworkInsightEl.innerHTML = topRate>0
+      ? `<span><b>Key takeaway:</b> ${top} has the highest rework rate this week at ${fmt1z(topRate)}% (${fmtz(byTeam[top].rf)} of ${fmtz(byTeam[top].design)} design tasks sent back).</span>`
+      : `<span><b>Key takeaway:</b> no rework recorded across any team this week.</span>`;
+  } else {
+    reworkInsightEl.innerHTML = '';
+  }
+
+  if(reworkChart) reworkChart.destroy();
+  const ctx = document.getElementById('reworkChart');
+  if(!teamList.length){
+    reworkChart = null;
+    ctx.parentElement.querySelectorAll('.empty').forEach(e=>e.remove());
+    const msg = document.createElement('div'); msg.className='empty'; msg.textContent='No design/rework activity this week for this filter.';
+    ctx.parentElement.appendChild(msg);
+    return;
+  } else {
+    ctx.parentElement.querySelectorAll('.empty').forEach(e=>e.remove());
+  }
+
+  const rates = teamList.map(t => byTeam[t].design>0 ? Math.round(byTeam[t].rf/byTeam[t].design*1000)/10 : 0);
+
+  reworkChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: teamList, datasets:[{
+      label:'Rework rate (%)', data: rates, backgroundColor:'#eda100', borderRadius:4
+    }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{ label:(item)=>{
+          const t = teamList[item.dataIndex];
+          return item.formattedValue + '% (' + fmt.format(byTeam[t].rf) + ' review&fix / ' + fmt.format(byTeam[t].design) + ' design)';
+        } } }
+      },
+      scales:{
+        x:{ beginAtZero:true, grid:{color:'#e1e0d9'}, ticks:{ callback:(v)=>v+'%' } },
+        y:{ grid:{display:false}, ticks:{font:{size:12.5}} }
+      }
+    }
+  });
+}
+
+function renderAgingChart(f){
+  const refD = new Date(DATA.sla_today_ref+'T00:00:00');
+  const refLabel = refD.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  document.getElementById('agingSub').textContent = 'Current snapshot as of ' + refLabel + ' — days left is measured against each job\'s Due Date. Not tied to the Week filter; Team/Customer filters still apply.';
+
+  const buckets = ['5d','4d','3d','2d','1d','0d'];
+  const activeByCust = {};
+  DATA.sla_active_jobs.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    activeByCust[r.Customer] = (activeByCust[r.Customer]||0) + r.active_jobs;
+  });
+
+  const distByCust = {};
+  DATA.sla_distribution.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!distByCust[r.Customer]) distByCust[r.Customer] = {};
+    distByCust[r.Customer][r.SLABucket] = (distByCust[r.Customer][r.SLABucket]||0) + r.n;
+  });
+
+  const jobsByCust = {};
+  DATA.sla_job_list.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!jobsByCust[r.Customer]) jobsByCust[r.Customer] = {};
+    if(!jobsByCust[r.Customer][r.SLABucket]) jobsByCust[r.Customer][r.SLABucket] = [];
+    jobsByCust[r.Customer][r.SLABucket].push(r.jobRef ? (r.jobId+' — '+r.jobRef) : r.jobId);
+  });
+
+  const custList = Object.keys(activeByCust).filter(c=>activeByCust[c]>0).sort((a,b)=>activeByCust[b]-activeByCust[a]);
+
+  const agingInsightEl = document.getElementById('agingInsight');
+  const tbody = document.querySelector('#agingTable tbody');
+  if(!custList.length){
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">No active jobs for this filter.</td></tr>';
+    agingInsightEl.innerHTML = '';
+    return;
+  }
+
+  const totalActive = custList.reduce((s,c)=>s+activeByCust[c],0);
+  const totalDueToday = custList.reduce((s,c)=>s+((distByCust[c]||{})['0d']||0),0);
+  if(totalDueToday>0){
+    const pct = Math.round(totalDueToday/totalActive*100);
+    agingInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${fmtz(totalDueToday)} of ${fmtz(totalActive)} active jobs (${pct}%) are due today or overdue — hover the "0d" badges to see which projects.</span>`;
+  } else {
+    agingInsightEl.innerHTML = `<span><b>Key takeaway:</b> no active jobs are due today or overdue for this filter — the backlog is currently within SLA.</span>`;
+  }
+
+  tbody.innerHTML = custList.map(c=>{
+    const dist = distByCust[c] || {};
+    const jobs = jobsByCust[c] || {};
+    const badges = buckets.map(b => {
+      const n = dist[b]||0;
+      const list = jobs[b] || [];
+      const tip = n>0 ? list.join('\n') : 'No jobs in this bucket';
+      return `<span class="sla-badge sla-${b.replace('d','')}" title="${tip.replace(/"/g,'&quot;')}">${b}: ${fmtz(n)}</span>`;
+    }).join('');
+    const noDue = dist['No due date'] || 0;
+    return `
+    <tr>
+      <td><span class="customer-link">${c}</span></td>
+      <td>${fmt.format(activeByCust[c])}</td>
+      <td><div class="sla-row">${badges}</div>${noDue>0 ? `<div style="font-size:10.5px;color:var(--ink-mute);margin-top:3px;">+${noDue} no due date</div>` : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderForecast(f){
+  const trailN = DATA.forecast_trailing_weeks.length;
+  document.getElementById('forecastSub').textContent =
+    'Based on average weekly pace and hours logged over the trailing ' + trailN + ' weeks (' + weekLabel(DATA.forecast_trailing_weeks[0]) + ' \u2192 ' + weekLabel(DATA.forecast_trailing_weeks[trailN-1]) + '). Assumes current staff on a customer keep working at their recent pace — not tied to the Week filter. Team/Customer filters still apply.';
+
+  const byCust = {};
+  DATA.backlog_forecast.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    if(!byCust[r.Customer]) byCust[r.Customer] = { backlog:0, weekly_jobs:0, hours_needed:0, weekly_hours:0, headcount:0, teams:new Set() };
+    const o = byCust[r.Customer];
+    o.backlog += r.backlog;
+    o.weekly_jobs += r.avg_weekly_jobs;
+    o.hours_needed += r.total_hours_needed;
+    o.weekly_hours += r.avg_weekly_hours;
+    o.headcount += r.avg_headcount;
+    if(r.backlog>0) o.teams.add(r.Team);
+  });
+
+  const rows = Object.keys(byCust).filter(c=>byCust[c].backlog>0).map(c=>{
+    const o = byCust[c];
+    const avgHoursPerJob = o.backlog>0 ? o.hours_needed/o.backlog : null;
+    const weeksJobs = o.weekly_jobs>0 ? o.backlog/o.weekly_jobs : null;
+    const weeksHours = o.weekly_hours>0 ? o.hours_needed/o.weekly_hours : null;
+    const hoursPerHc = o.headcount>0 ? o.weekly_hours/o.headcount : null;
+    const requiredWeeklyHours = o.hours_needed/targetWeeks;
+    const gap = requiredWeeklyHours - o.weekly_hours;
+    let extraHc;
+    if(gap<=0) extraHc = 0;
+    else if(hoursPerHc>0) extraHc = Math.ceil(gap/hoursPerHc);
+    else extraHc = null;
+    return { Customer:c, Team: Array.from(o.teams).join(', ') || 'Unmapped', backlog:o.backlog, weekly_jobs:o.weekly_jobs,
+      weeksJobs, avgHoursPerJob, hours_needed:o.hours_needed, weekly_hours:o.weekly_hours, headcount:o.headcount,
+      weeksHours, extraHc };
+  });
+
+  rows.sort((a,b)=>{
+    const av = a.weeksHours===null ? -1 : a.weeksHours;
+    const bv = b.weeksHours===null ? -1 : b.weeksHours;
+    return bv-av;
+  });
+
+  document.getElementById('forecastTitle').textContent = 'Backlog clearance forecast' + (f.team!=='all'?' · '+f.team:'') + (f.cust!=='all'?' · '+f.cust:'');
+
+  const forecastInsightEl = document.getElementById('forecastInsight');
+  const atRisk = rows.filter(r=>r.weeksHours!==null && r.weeksHours>targetWeeks);
+  if(rows.length===0){
+    forecastInsightEl.innerHTML = '';
+  } else if(atRisk.length===0){
+    forecastInsightEl.innerHTML = `<span><b>Key takeaway:</b> every customer with backlog is on pace to clear it within the ${targetWeeks}-week target — no additional staffing indicated.</span>`;
+  } else {
+    const extraTotal = atRisk.reduce((s,r)=> s + (r.extraHc===null?0:r.extraHc), 0);
+    forecastInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${atRisk.length} of ${rows.length} customers won't clear their backlog within ${targetWeeks} weeks at current pace — roughly +${fmtz(extraTotal)} combined headcount would close that gap (worst: ${atRisk[0].Customer}).</span>`;
+  }
+
+  // ---- chart ----
+  const wrap = document.getElementById('forecastChartWrap');
+  wrap.style.height = Math.max(200, rows.length*38 + 60) + 'px';
+  if(forecastChart) forecastChart.destroy();
+  const ctx = document.getElementById('forecastChart');
+  const legendEl = document.getElementById('forecastLegend');
+
+  if(!rows.length){
+    forecastChart = null;
+    legendEl.innerHTML = '';
+    wrap.querySelectorAll('.empty').forEach(e=>e.remove());
+    const msg = document.createElement('div'); msg.className='empty'; msg.textContent='No backlog for this filter.';
+    wrap.appendChild(msg);
+  } else {
+    wrap.querySelectorAll('.empty').forEach(e=>e.remove());
+    const colors = rows.map(r=>{
+      if(r.weeksHours===null) return '#b9b7b0';
+      return r.weeksHours>targetWeeks ? '#e34948' : '#3b6d11';
+    });
+    forecastChart = new Chart(ctx, {
+      type:'bar',
+      data:{ labels: rows.map(r=>r.Customer), datasets:[{
+        label:'Weeks to clear backlog',
+        data: rows.map(r=> r.weeksHours===null ? 0 : Math.round(r.weeksHours*10)/10),
+        backgroundColor: colors, borderRadius:4
+      }]},
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false },
+          tooltip:{ callbacks:{ label:(item)=>{
+            const r = rows[item.dataIndex];
+            if(r.weeksHours===null) return 'No recent completions — insufficient data to forecast';
+            return r.weeksHours.toFixed(1)+' weeks at current pace (target: '+targetWeeks+'w)';
+          }, footer:(items)=>{
+            const r = rows[items[0].dataIndex];
+            return r.extraHc===null ? 'Extra headcount: unknown (no capacity baseline)' : 'Extra headcount for target: ' + r.extraHc;
+          } } }
+        },
+        scales:{
+          x:{ beginAtZero:true, grid:{color:'#e1e0d9'}, title:{ display:true, text:'Weeks to clear backlog' } },
+          y:{ grid:{display:false}, ticks:{font:{size:12.5}} }
+        }
+      }
+    });
+    legendEl.innerHTML = `
+      <span class="legend-chip" style="cursor:default;"><span class="swatch" style="background:#3b6d11;"></span>Within target (${targetWeeks}w)</span>
+      <span class="legend-chip" style="cursor:default;"><span class="swatch" style="background:#e34948;"></span>Exceeds target — may need more staff</span>
+      <span class="legend-chip" style="cursor:default;"><span class="swatch" style="background:#b9b7b0;"></span>No recent completions</span>
+    `;
+  }
+
+  // ---- table ----
+  const tbody = document.querySelector('#forecastTable tbody');
+  tbody.innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td>${r.Customer}</td>
+      <td><span class="team-tag">${r.Team}</span></td>
+      <td>${fmtz(r.backlog)}</td>
+      <td>${fmt1z(r.weekly_jobs)}</td>
+      <td>${fmt1z(r.weeksJobs)}</td>
+      <td>${fmt1z(r.avgHoursPerJob)}</td>
+      <td>${fmtz(Math.round(r.hours_needed))}</td>
+      <td>${fmt1z(r.weekly_hours)}</td>
+      <td>${fmt1z(r.headcount)}</td>
+      <td>${r.extraHc===null?'unknown':(r.extraHc===0?'-':'+'+r.extraHc)}</td>
+    </tr>`).join('') : '<tr><td colspan="10" class="empty">No backlog for this filter.</td></tr>';
+}
+
+const JOBTYPE_COLORS = {
+  'Amd. Single-level':      { fill:'rgba(168,200,234,0.55)', border:'#7fa9d6' },
+  'Amd. Multi-level':       { fill:'rgba(79,143,209,0.55)',  border:'#2a78d6' },
+  'Amd. Multi-residential': { fill:'rgba(20,74,124,0.65)',   border:'#0f3a63' },
+  'Est. Single-level':      { fill:'rgba(169,223,192,0.55)', border:'#7fca9f' },
+  'Est. Multi-level':       { fill:'rgba(63,174,118,0.55)',  border:'#1baf7a' },
+  'Est. Multi-residential': { fill:'rgba(13,107,63,0.65)',   border:'#0a4d2e' },
+  'Det. Single level':      { fill:'rgba(245,201,138,0.55)', border:'#e8b463' },
+  'Det. Multi-level':       { fill:'rgba(237,161,0,0.55)',   border:'#eda100' },
+  'Det. Multi-residential': { fill:'rgba(168,94,0,0.65)',    border:'#7a4400' },
+};
+const JOBTYPE_FALLBACK = { fill:'rgba(139,137,131,0.5)', border:'#8b8983' };
+
+function renderScatterChart(f){
+  let scopeLabel;
+  if(scatterScope==='week'){
+    scopeLabel = weekLabel(f.week);
+  } else {
+    const firstStart = new Date(DATA.weeks[0]+'T00:00:00');
+    const lastStart = new Date(DATA.weeks[DATA.weeks.length-1]+'T00:00:00');
+    const lastEnd = new Date(lastStart.getTime()+6*86400000);
+    const opt = {month:'short', day:'numeric'};
+    scopeLabel = 'all weeks (' + firstStart.toLocaleDateString('en-US',opt) + ' – ' + lastEnd.toLocaleDateString('en-US',opt) + ', ' + lastEnd.getFullYear() + ')';
+  }
+  document.getElementById('scatterTitle').textContent = 'Project size vs. time consumed — ' + scopeLabel + (f.team!=='all'?' · '+f.team:'') + (f.cust!=='all'?' · '+f.cust:'');
+
+  const points = DATA.job_scatter.filter(r=>{
+    if(scatterScope==='week' && r.Week!==f.week) return false;
+    if(f.team!=='all' && r.Team!==f.team) return false;
+    if(f.cust!=='all' && r.Customer!==f.cust) return false;
+    return true;
+  });
+
+  const hours = points.map(p=>p.invested_hours).filter(h=>h>0);
+  const minH = hours.length ? Math.min(...hours) : 0;
+  const maxH = hours.length ? Math.max(...hours) : 1;
+  const minR = 4, maxR = 26;
+  function radiusFor(h){
+    if(maxH===minH) return (minR+maxR)/2;
+    const t = Math.sqrt(Math.max(h-minH,0) / (maxH-minH));
+    return minR + t*(maxR-minR);
+  }
+
+  const bubbleData = points.map(p=>({ x:p.sqm, y:p.units, r: radiusFor(p.invested_hours), meta:p }));
+
+  if(scatterChart) scatterChart.destroy();
+
+  const ctx = document.getElementById('scatterChart');
+  const legendEl = document.getElementById('scatterLegend');
+  const summaryEl = document.getElementById('scatterSummary');
+  if(!points.length){
+    scatterChart = null;
+    legendEl.innerHTML = '';
+    summaryEl.innerHTML = '';
+    document.getElementById('scatterInsight').innerHTML = '';
+    const parent = ctx.parentElement;
+    parent.querySelectorAll('.empty').forEach(e=>e.remove());
+    const msg = document.createElement('div');
+    msg.className='empty';
+    msg.textContent='No completed jobs with design output for this week/filter.';
+    parent.appendChild(msg);
+    return;
+  } else {
+    ctx.parentElement.querySelectorAll('.empty').forEach(e=>e.remove());
+  }
+
+  // group bubbles into one dataset per JobType so each gets its own color + legend entry
+  const ptRank = {Amd:0, Est:1, Det:2};
+  const jobTypesPresent = Array.from(new Set(points.map(p=>p.JobType))).sort((a,b)=>{
+    const pa = ptRank[a.split('.')[0]] ?? 9, pb = ptRank[b.split('.')[0]] ?? 9;
+    return pa-pb || a.localeCompare(b);
+  });
+
+  const scatterDatasets = jobTypesPresent.map(jt=>{
+    const colors = JOBTYPE_COLORS[jt] || JOBTYPE_FALLBACK;
+    return {
+      label: jt,
+      data: bubbleData.filter(b=>b.meta.JobType===jt),
+      backgroundColor: colors.fill,
+      borderColor: colors.border,
+      borderWidth: 1
+    };
+  });
+
+  scatterChart = new Chart(ctx, {
+    type:'bubble',
+    data:{ datasets: scatterDatasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label:(item)=>{
+          const p = item.raw.meta;
+          const weeksAge = Math.round(p.AgeDays/7*10)/10;
+          return [p.Customer + ' — ' + p.jobId + ' (' + p.JobType + ')', 'Sqm: '+fmt.format(p.sqm), 'Units: '+fmt.format(p.units), 'Hours invested: '+fmt1(p.invested_hours), 'Designer(s): '+p.Designers, 'Created: '+p.TimeCreated, 'Completed: '+p.TimeComplete, 'Job age: '+fmt1(p.AgeDays)+' days (~'+weeksAge+' weeks)'];
+        } } }
+      },
+      scales:{
+        x:{ title:{ display:true, text:'Designed square meters' }, beginAtZero:true, grid:{color:'#e1e0d9'} },
+        y:{ title:{ display:true, text:'Dwelling units' }, beginAtZero:true, grid:{color:'#e1e0d9'} }
+      }
+    }
+  });
+
+  legendEl.innerHTML = scatterDatasets.map((ds,i)=>`
+    <span class="legend-chip" data-index="${i}">
+      <span class="swatch" style="background:${ds.borderColor};"></span>${ds.label}
+    </span>
+  `).join('');
+  legendEl.querySelectorAll('.legend-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const i = parseInt(chip.dataset.index, 10);
+      const meta = scatterChart.getDatasetMeta(i);
+      meta.hidden = meta.hidden === null ? !scatterChart.data.datasets[i].hidden : !meta.hidden;
+      chip.classList.toggle('chip-off', !!meta.hidden);
+      scatterChart.update();
+    });
+  });
+
+  const avgByType = jobTypesPresent.map(jt=>{
+    const pts = points.filter(p=>p.JobType===jt);
+    const avg = pts.reduce((s,p)=>s+p.invested_hours,0) / pts.length;
+    return { jt, avg, n: pts.length, color: (JOBTYPE_COLORS[jt]||JOBTYPE_FALLBACK).border };
+  });
+  summaryEl.innerHTML = `
+    <div style="font-weight:700;margin-bottom:5px;color:var(--ink-soft);">Avg hours invested / job</div>
+    ${avgByType.map(o=>`
+      <div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:2px;background:${o.color};display:inline-block;"></span>${o.jt}</span>
+        <span style="font-weight:600;">${fmt1(o.avg)}h <span style="color:var(--ink-mute);font-weight:400;">(n=${o.n})</span></span>
+      </div>
+    `).join('')}
+  `;
+
+  const mostExpensive = avgByType.reduce((a,b)=> a.avg>=b.avg ? a : b);
+  const cheapest = avgByType.reduce((a,b)=> a.avg<=b.avg ? a : b);
+  const scatterInsightEl = document.getElementById('scatterInsight');
+  if(avgByType.length>1){
+    scatterInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${mostExpensive.jt} jobs take the most time on average (${fmt1(mostExpensive.avg)}h/job) — about ${fmt1(mostExpensive.avg/cheapest.avg)}× ${cheapest.jt} (${fmt1(cheapest.avg)}h/job).</span>`;
+  } else if(avgByType.length===1){
+    scatterInsightEl.innerHTML = `<span><b>Key takeaway:</b> ${mostExpensive.jt} is the only project type in view this period, averaging ${fmt1(mostExpensive.avg)}h/job.</span>`;
+  } else {
+    scatterInsightEl.innerHTML = '';
+  }
+
+  // Pick whichever chart corner sits farthest from its single nearest bubble (maximin distance),
+  // so the box lands in genuinely open space rather than just "the emptier half".
+  const maxX = Math.max(...points.map(p=>p.sqm), 1);
+  const maxY = Math.max(...points.map(p=>p.units), 1);
+  const corners = { tr:[1,1], tl:[0,1], br:[1,0], bl:[0,0] };
+  let best = 'tr', bestScore = -1;
+  Object.keys(corners).forEach(key=>{
+    const [cx,cy] = corners[key];
+    let minDist = Infinity;
+    points.forEach(p=>{
+      const nx = p.sqm/maxX, ny = p.units/maxY;
+      const d = Math.hypot(nx-cx, ny-cy);
+      if(d<minDist) minDist = d;
+    });
+    if(minDist > bestScore){ bestScore = minDist; best = key; }
+  });
+  summaryEl.style.top = summaryEl.style.bottom = summaryEl.style.left = summaryEl.style.right = 'auto';
+  if(best==='tr'){ summaryEl.style.top='10px'; summaryEl.style.right='14px'; }
+  else if(best==='tl'){ summaryEl.style.top='10px'; summaryEl.style.left='50px'; }
+  else if(best==='br'){ summaryEl.style.bottom='38px'; summaryEl.style.right='14px'; }
+  else { summaryEl.style.bottom='38px'; summaryEl.style.left='50px'; }
+}
+
+
+function renderSummaryTable(f){
+  const idx = DATA.weeks.indexOf(f.week);
+  const start = Math.max(0, idx-4);
+  const windowWeeks = DATA.weeks.slice(start, idx+1);
+  const relLabels = windowWeeks.map((w,i)=>{
+    const distFromEnd = windowWeeks.length-1-i;
+    return distFromEnd===0 ? 'W0 (this week)' : 'W-'+distFromEnd;
+  });
+
+  document.getElementById('summaryTitle').textContent = '5-week summary' + (f.team!=='all'?' · '+f.team:'') + (f.cust!=='all'?' · '+f.cust:'');
+
+  const head = document.getElementById('summaryHead');
+  head.innerHTML = '<th>Metric</th>' + relLabels.map((l,i)=>`<th>${l}<br><span style="font-weight:400;color:var(--ink-mute);font-size:11.5px;">${weekLabel(windowWeeks[i])}</span></th>`).join('');
+
+  function sumFor(w, filterFn){
+    let s=0;
+    filterFn(w).forEach(v=>s+=v);
+    return s;
+  }
+
+  // totals per week
+  const totalsByWeek = windowWeeks.map(w=>{
+    let jobs=0, layouts=0, units=0, sqm=0;
+    DATA.customer_weekly.forEach(r=>{
+      if(r.Week!==w) return;
+      if(f.team!=='all' && r.Team!==f.team) return;
+      if(f.cust!=='all' && r.Customer!==f.cust) return;
+      jobs+=r.jobs; layouts+=r.layouts; units+=r.units; sqm+=r.sqm;
+    });
+    return {jobs, layouts, units, sqm};
+  });
+
+  // job type breakdown per week
+  const jobTypesSeen = new Set();
+  const jtByWeek = windowWeeks.map(w=>{
+    const m = {};
+    DATA.jobtype_weekly.forEach(r=>{
+      if(r.Week!==w) return;
+      if(f.team!=='all' && r.Team!==f.team) return;
+      if(f.cust!=='all' && r.Customer!==f.cust) return;
+      m[r.JobType] = (m[r.JobType]||0) + r.jobs;
+      jobTypesSeen.add(r.JobType);
+    });
+    return m;
+  });
+  const ptRank = {Amd:0, Det:1, Est:2, Training:3};
+  const jobTypeList = Array.from(jobTypesSeen).sort((a,b)=>{
+    const pa = ptRank[a.split('.')[0]] ?? 9, pb = ptRank[b.split('.')[0]] ?? 9;
+    return pa-pb || a.localeCompare(b);
+  });
+
+  // headcount per week
+  const hcByWeek = windowWeeks.map(w=>{
+    let people = new Set();
+    // headcount_weekly already dedups per Week+Team+Customer, so sum across matching rows (approx, may double count across customers if filter=all)
+    let total = 0;
+    DATA.headcount_weekly.forEach(r=>{
+      if(r.Week!==w) return;
+      if(f.team!=='all' && r.Team!==f.team) return;
+      if(f.cust!=='all' && r.Customer!==f.cust) return;
+      total += r.headcount;
+    });
+    return total;
+  });
+
+  let rows = '';
+  rows += `<tr class="total"><td>Jobs completed</td>${totalsByWeek.map(t=>`<td>${fmtz(t.jobs)}</td>`).join('')}</tr>`;
+  jobTypeList.forEach(jt=>{
+    rows += `<tr class="sub"><td>${jt}</td>${jtByWeek.map(m=>`<td>${fmtz(m[jt]||0)}</td>`).join('')}</tr>`;
+  });
+  rows += `<tr class="section"><td>Headcount</td>${hcByWeek.map(h=>`<td>${fmtz(h)}</td>`).join('')}</tr>`;
+  rows += `<tr class="section"><td>Units designed</td>${totalsByWeek.map(t=>`<td>${fmtz(t.units)}</td>`).join('')}</tr>`;
+  rows += `<tr><td>Sqm designed</td>${totalsByWeek.map(t=>`<td>${fmtz(Math.round(t.sqm))}</td>`).join('')}</tr>`;
+  rows += `<tr><td>Layouts</td>${totalsByWeek.map(t=>`<td>${fmtz(t.layouts)}</td>`).join('')}</tr>`;
+
+  document.querySelector('#summaryTable tbody').innerHTML = rows;
+}
+
+weekSel.addEventListener('change', render);
+teamSel.addEventListener('change', ()=>{ populateCustomers(); render(); });
+custSel.addEventListener('change', render);
+
+document.querySelectorAll('#scatterScopeToggle .scope-btn').forEach(btn=>{
+  if(btn.dataset.scope===scatterScope) btn.classList.add('active');
+  btn.addEventListener('click', ()=>{
+    if(scatterScope===btn.dataset.scope) return;
+    scatterScope = btn.dataset.scope;
+    document.querySelectorAll('#scatterScopeToggle .scope-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    renderScatterChart(currentFilters());
+  });
+});
+
+const targetWeeksInput = document.getElementById('targetWeeksInput');
+targetWeeksInput.addEventListener('change', ()=>{
+  let v = parseInt(targetWeeksInput.value, 10);
+  if(isNaN(v) || v<1) v = 1;
+  if(v>12) v = 12;
+  targetWeeksInput.value = v;
+  targetWeeks = v;
+  renderForecast(currentFilters());
+});
+
+render();
+
+// ---- tabs ----
+let ganttLoaded = false;
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    document.getElementById('tabDashboard').classList.toggle('active', tab==='dashboard');
+    document.getElementById('tabGantt').classList.toggle('active', tab==='gantt');
+    if(tab==='gantt' && !ganttLoaded){
+      ganttLoaded = true;
+      const src = document.getElementById('ganttSource').textContent.replace(/<\\\/script/gi, '<\/script');
+      document.getElementById('ganttFrame').srcdoc = src;
+    }
+  });
+});
+</script>
+</body>
+</html>
