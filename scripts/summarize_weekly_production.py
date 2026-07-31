@@ -1,6 +1,8 @@
 import os
 import sys
 import re
+from docx import Document
+import re
 import json
 import pandas as pd
 import numpy as np
@@ -120,7 +122,7 @@ def get_task_flow_type(task_type_name):
     elif 'check' in name_lower:
         return 'Check'
     elif 'review' in name_lower and 'fix' in name_lower:
-        return 'Review & Fix'
+        return 'R&F'
     elif 'train' in name_lower:
         return 'Training'
     return 'Other'
@@ -156,6 +158,100 @@ def get_kpi_target(company, kpi_config):
     else:
         return config.get("Customer Type", "Full-time"), config.get("Expected Metric", "Jobs"), config.get("Daily Expected Output", 0)
 
+
+def generate_docx_report(lines, docx_path):
+    doc = Document()
+    
+    in_table = False
+    table_lines = []
+    
+    def process_table():
+        if not table_lines: return
+        # Filter out the separator line |---|---|
+        headers = [col.strip() for col in table_lines[0].strip('|').split('|')]
+        data_rows = []
+        for r_line in table_lines[1:]:
+            clean_r = r_line.replace('-', '').replace(':', '').replace('|', '').strip()
+            if not clean_r:
+                continue
+            data_rows.append([col.strip() for col in r_line.strip('|').split('|')])
+            
+        table = doc.add_table(rows=1, cols=len(headers))
+        table.style = 'Table Grid'
+        
+        # Add headers
+        hdr_cells = table.rows[0].cells
+        for i, header in enumerate(headers):
+            if i < len(hdr_cells):
+                hdr_cells[i].text = header
+            
+        # Add data
+        for row_data in data_rows:
+            row_cells = table.add_row().cells
+            for i, cell_data in enumerate(row_data):
+                if i < len(row_cells):
+                    cell_data = cell_data.replace('&nbsp;', ' ').strip()
+                    p = row_cells[i].paragraphs[0]
+                    p.text = ""
+                    parts = re.split(r'(\?\*\?\*.*?\?\*\?\*)', cell_data)
+                    for part in parts:
+                        if part.startswith('**') and part.endswith('**'):
+                            p.add_run(part[2:-2]).bold = True
+                        else:
+                            p.add_run(part)
+                    
+        table_lines.clear()
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if in_table:
+                process_table()
+                in_table = False
+            continue
+            
+        if line.startswith('|'):
+            in_table = True
+            table_lines.append(line)
+        else:
+            if in_table:
+                process_table()
+                in_table = False
+                
+            if line.startswith('# '):
+                doc.add_heading(line[2:].strip(), level=1)
+            elif line.startswith('## '):
+                doc.add_heading(line[3:].strip(), level=2)
+            elif line.startswith('### '):
+                doc.add_heading(line[4:].strip(), level=3)
+            elif line.startswith('#### '):
+                doc.add_heading(line[5:].strip(), level=4)
+            elif line.startswith('##### '):
+                doc.add_heading(line[6:].strip(), level=5)
+            else:
+                p = doc.add_paragraph()
+                parts = re.split(r'(\*\*.*?\*\*)', line)
+                for part in parts:
+                    if part.startswith('**') and part.endswith('**'):
+                        p.add_run(part[2:-2]).bold = True
+                    else:
+                        p.add_run(part)
+
+    if in_table:
+        process_table()
+        
+    try:
+        doc.save(docx_path)
+        return docx_path
+    except PermissionError:
+        from datetime import datetime
+        base, ext = os.path.splitext(docx_path)
+        timestamp = datetime.now().strftime("%H%M%S")
+        alt_path = f"{base}_{timestamp}{ext}"
+        doc.save(alt_path)
+        print(f"Warning: Target file '{docx_path}' was locked. Saved report to: {alt_path}")
+        return alt_path
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Generate Weekly HR Output and Attendance Report')
@@ -164,10 +260,10 @@ def main():
     args = parser.parse_args()
 
     # Paths
-    workload_path = r"G:\My Drive\Dữ liệu nhân sự\Workload\Construction Team\Report_Past Month_Jul 11, 2026.xlsx"
+    workload_path = r"G:\My Drive\Dữ liệu nhân sự\Workload\Construction Team\Report_Past Month.xlsx"
     attendance_path = r"G:\My Drive\Dữ liệu nhân sự\Data\Timesheet\HR_Fact_Attendance.xlsx"
-    kpi_path = r"G:\My Drive\Dữ liệu nhân sự\.agents\skills\workload_daily_report\references\Customer KPI Mapping.json"
-    output_dir = r"G:\My Drive\Dữ liệu nhân sự\.agents\skills\Output_weekly_report\reports"
+    kpi_path = r"G:\My Drive\Dữ liệu nhân sự\.agents\skills\Ops_weekly_output_report\references\Customer KPI Mapping.json"
+    output_dir = r"G:\My Drive\Dữ liệu nhân sự\.agents\skills\Ops_weekly_output_report\reports"
     
     if not os.path.exists(workload_path):
         print(f"Error: Workload file not found at '{workload_path}'")
@@ -258,20 +354,6 @@ def main():
     emp_df['EmployeeID'] = emp_df['EmployeeID'].astype(str).str.strip()
     
     # ── MAPPING WORKLOAD USERS TO TEAMS ──────────────────────────────────────────
-    # Fallback team info from detailed timesheet
-    id_to_team_ts = {}
-    ts_file = r"G:\My Drive\Dữ liệu nhân sự\Data\Timesheet\Bảng chấm công chi tiết_Bảng chấm công từ ngày 21_06_2026 đến ngày 20_07_2026.xlsx"
-    if os.path.exists(ts_file):
-        try:
-            df_ts_fallback = pd.read_excel(ts_file, header=None, skiprows=10)
-            for r_idx in range(1, len(df_ts_fallback)):
-                emp_id = str(df_ts_fallback.iloc[r_idx, 1]).strip()
-                team_val = str(df_ts_fallback.iloc[r_idx, 4]).strip()
-                if emp_id and emp_id != 'nan' and team_val and team_val != 'nan':
-                    id_to_team_ts[emp_id] = team_val
-        except Exception as e:
-            print(f"Warning: Failed to load fallback team mapping: {e}")
-
     custom_username_to_en = {
         'adrian r': 'Adrian',
         'nam nguyen': 'Nguyễn Tuấn Nam',
@@ -313,23 +395,11 @@ def main():
                     
         if emp_id:
             workload_to_id[name] = emp_id
-            cleveland_ids = {'MTVN0001', 'MTVN0021', 'MTVN0049', 'MTVN0073', 'MTVN0082', 'MTVN0086'}
-            if emp_id in cleveland_ids:
-                user_to_team[name] = 'Cleveland'
-            elif emp_id == 'MTVN0042':
-                user_to_team[name] = 'Estimating'
-            elif emp_id == 'MTVN-HCM0020':
-                user_to_team[name] = 'Frame & Truss'
-            elif emp_id == 'MTVN0035':
-                user_to_team[name] = 'Drafting'
+            emp_row = emp_df[emp_df['EmployeeID'] == emp_id]
+            if len(emp_row) > 0 and pd.notna(emp_row.iloc[0]['Team']) and str(emp_row.iloc[0]['Team']).strip() != '':
+                user_to_team[name] = str(emp_row.iloc[0]['Team']).strip()
             else:
-                emp_row = emp_df[emp_df['EmployeeID'] == emp_id]
-                if len(emp_row) > 0:
-                    user_to_team[name] = emp_row.iloc[0]['Team']
-                elif emp_id in id_to_team_ts:
-                    user_to_team[name] = id_to_team_ts[emp_id]
-                else:
-                    user_to_team[name] = 'Unknown'
+                user_to_team[name] = 'Unknown'
         else:
             user_to_team[name] = 'Unknown'
 
@@ -473,15 +543,15 @@ def main():
     w0_tasks['Design_Sqm'] = w0_tasks.apply(lambda r: r['Designed Square Meter'] if r['FlowType'] == 'Design' else 0.0, axis=1)
     w0_tasks['Design_Layouts'] = w0_tasks.apply(lambda r: r['Designed Layout'] if r['FlowType'] == 'Design' else 0.0, axis=1)
     
-    member_workload = pd.DataFrame(columns=['userName', 'Design', 'Check', 'Review & Fix', 'Training', 'Design_Units', 'Design_Sqm', 'Design_Layouts'])
+    member_workload = pd.DataFrame(columns=['userName', 'Design', 'Check', 'R&F', 'Training', 'Design_Units', 'Design_Sqm', 'Design_Layouts'])
     if len(w0_tasks) > 0:
         counts = w0_tasks.groupby(['userName', 'FlowType']).size().unstack(fill_value=0).reset_index()
-        for col in ['Design', 'Check', 'Review & Fix', 'Training']:
+        for col in ['Design', 'Check', 'R&F', 'Training']:
             if col not in counts.columns:
                 counts[col] = 0
         vols = w0_tasks.groupby('userName')[['Design_Units', 'Design_Sqm', 'Design_Layouts']].sum().reset_index()
         member_workload = pd.merge(counts, vols, on='userName')
-        member_workload = member_workload[['userName', 'Design', 'Check', 'Review & Fix', 'Training', 'Design_Units', 'Design_Sqm', 'Design_Layouts']]
+        member_workload = member_workload[['userName', 'Design', 'Check', 'R&F', 'Training', 'Design_Units', 'Design_Sqm', 'Design_Layouts']]
         
     # ── METRIC 5: INTRAWEEK COMPLETED TASKS IN W0 ────────────────────────────────
     print("Calculating Intraweek completed tasks...")
@@ -497,13 +567,13 @@ def main():
     w0_intraweek_tasks = w0_intraweek_tasks[~w0_intraweek_tasks['norm_user'].isin(EXCLUDE_USERS)]
     w0_intraweek_tasks['FlowType'] = w0_intraweek_tasks['taskTypeName'].apply(get_task_flow_type)
     
-    intraweek_summary = pd.DataFrame(columns=['userName', 'Design', 'Check', 'Review & Fix', 'Training'])
+    intraweek_summary = pd.DataFrame(columns=['userName', 'Design', 'Check', 'R&F', 'Training'])
     if len(w0_intraweek_tasks) > 0:
         intraweek_summary = w0_intraweek_tasks.groupby(['userName', 'FlowType']).size().unstack(fill_value=0).reset_index()
-        for col in ['Design', 'Check', 'Review & Fix', 'Training']:
+        for col in ['Design', 'Check', 'R&F', 'Training']:
             if col not in intraweek_summary.columns:
                 intraweek_summary[col] = 0
-        intraweek_summary = intraweek_summary[['userName', 'Design', 'Check', 'Review & Fix', 'Training']]
+        intraweek_summary = intraweek_summary[['userName', 'Design', 'Check', 'R&F', 'Training']]
 
     # ── METRIC 5b: PER-CUSTOMER MEMBER WORKLOAD ───────────────────────────────────
     # Attach Company to w0_tasks via job_map
@@ -516,7 +586,7 @@ def main():
         .unstack(fill_value=0)
         .reset_index()
     )
-    for col in ['Design', 'Check', 'Review & Fix', 'Training']:
+    for col in ['Design', 'Check', 'R&F', 'Training']:
         if col not in mc_counts_raw.columns:
             mc_counts_raw[col] = 0
 
@@ -565,7 +635,7 @@ def main():
         sl = str(s).lower()
         if 'design' in sl: return 'Design'
         if 'check'  in sl: return 'Check'
-        if 'review' in sl and 'fix' in sl: return 'Review & Fix'
+        if 'review' in sl and 'fix' in sl: return 'R&F'
         return 'Other'
 
     _wt_week['ProjectPrefix'] = _wt_week['taskTypeName'].apply(_get_prefix)
@@ -827,24 +897,18 @@ def main():
     # ── GENERATE MARKDOWN REPORT (TEAM → CUSTOMER → MEMBER) ─────────────────────
     print("Generating report text...")
     report_lines = []
-    report_lines.append("# BÁO CÁO NHÂN SỰ HÀNG TUẦN THEO TEAM (WEEKLY HR PERFORMANCE BY TEAM)")
-    report_lines.append(f"**Tuần báo cáo:** {w0_start.strftime('%d/%m/%Y')} – {w0_end.strftime('%d/%m/%Y')} (Tuần {w0_start.isocalendar()[1]} / năm {w0_start.year})")
-    report_lines.append(f"**Ngày lập báo cáo:** {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    report_lines.append("# WEEKLY HR & WORKLOAD PERFORMANCE REPORT BY TEAM")
+    report_lines.append(f"**Reporting Period:** {w0_start.strftime('%d/%m/%Y')} – {w0_end.strftime('%d/%m/%Y')} (Week {w0_start.isocalendar()[1]} / {w0_start.year})")
+    report_lines.append(f"**Report Date:** {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     report_lines.append("\n---\n")
 
-    report_lines.append("### Quy tắc loại trừ và chuẩn hóa dữ liệu:")
-    report_lines.append("- Loại bỏ dự án thuộc khách hàng `Test`.")
-    report_lines.append("- Loại bỏ tác vụ hành chính/báo giá `Admin - QS`.")
-    report_lines.append("- Loại bỏ nhân sự quản lý/điều phối/IT/HR: `Huong Huynh`, `Unallocated`, `Adrian`, `Thuy Ho`, `Thuy  Ho`, `Long Nguyen`, `Tam Doan`.")
-    report_lines.append("- Khối lượng thiết kế (căn, diện tích, bản vẽ) **chỉ tính cho các tác vụ có loại công việc (TaskTypeName) chứa từ khóa \"Design\"**.")
-    report_lines.append("\n---\n")
 
     active_teams = ['Frame & Truss', 'Drafting', 'Estimating', 'Engineered Wood Products (EWP)', 'Cleveland']
     week_labels  = ["W-4", "W-3", "W-2", "W-1", "W0 (Current)"]
 
     for t_idx, team_name in enumerate(active_teams, 1):
         report_lines.append(f"# {t_idx}. TEAM: {team_name.upper()}")
-        report_lines.append(f"Phân tích hiệu suất khối lượng công việc của Khách hàng (Customer) và năng suất nhân viên (Member) thuộc Team **{team_name}**.")
+        report_lines.append(f"Workload volume analysis for Clients (Customers) and member productivity for Team **{team_name}**.")
         report_lines.append("")
 
         team_members = [k for k, v in user_to_team.items() if v == team_name]
@@ -873,8 +937,8 @@ def main():
 
             report_lines.append(f"## {t_idx}.{c_idx}. {company}")
             report_lines.append(
-                f"**Loại khách hàng:** {cust_type} &nbsp;|&nbsp; "
-                f"**KPI tuần (Target):** {weekly_target if weekly_target > 0 else 'N/A'} {metric}"
+                f"**Client Type:** {cust_type}  |  "
+                f"**Weekly Target:** {weekly_target if weekly_target > 0 else 'N/A'} {metric}"
             )
             report_lines.append("")
 
@@ -899,10 +963,10 @@ def main():
                     headcounts_val.append(0)
 
             if sum(jobs_val) > 0:
-                report_lines.append("#### Output 5 tuần gần nhất:")
-                report_lines.append("| Chỉ số | W-4 | W-3 | W-2 | W-1 | W0 (Tuần này) |")
+                report_lines.append("#### Output Trend (Past 5 Weeks):")
+                report_lines.append("| Metrics | W-4 | W-3 | W-2 | W-1 | W0 (Current Week) |")
                 report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
-                report_lines.append("| Số Job hoàn thành | " + " | ".join([fmt_int(x) for x in jobs_val]) + " |")
+                report_lines.append("| Completed Jobs | " + " | ".join([fmt_int(x) for x in jobs_val]) + " |")
 
                 # Project Type sub-rows
                 if len(comp_detail) > 0:
@@ -913,27 +977,27 @@ def main():
                             sub_jt = jt_data[jt_data['Week'] == wl]
                             jt_vals.append(sub_jt['Jobs_Completed'].sum())
                         if sum(jt_vals) > 0:
-                            report_lines.append(f"| &nbsp;&nbsp;&nbsp;&nbsp;• {jt} | " + " | ".join([fmt_int(x) for x in jt_vals]) + " |")
+                            report_lines.append(f"|     • {jt} | " + " | ".join([fmt_int(x) for x in jt_vals]) + " |")
 
-                report_lines.append("| Số lượng Headcount | " + " | ".join([fmt_int(x) for x in headcounts_val]) + " |")
-                report_lines.append("| Thiết kế: Căn hộ (Units) | " + " | ".join([fmt_int(x) for x in units_val]) + " |")
-                report_lines.append("| Thiết kế: Diện tích (Sqm) | " + " | ".join([fmt_sqm(x) for x in sqm_val]) + " |")
-                report_lines.append("| Thiết kế: Bản vẽ (Layouts) | " + " | ".join([fmt_int(x) for x in layouts_val]) + " |")
+                report_lines.append("| Headcount | " + " | ".join([fmt_int(x) for x in headcounts_val]) + " |")
+                report_lines.append("| Dwelling Units | " + " | ".join([fmt_int(x) for x in units_val]) + " |")
+                report_lines.append("| Area (Sqm) | " + " | ".join([fmt_sqm(x) for x in sqm_val]) + " |")
+                report_lines.append("| Designed (Layouts) | " + " | ".join([fmt_int(x) for x in layouts_val]) + " |")
                 report_lines.append("")
 
                 # KPI inline
                 actual_w0 = jobs_val[-1] if metric == "Jobs" else layouts_val[-1]
                 if weekly_target > 0:
                     pct = (actual_w0 / weekly_target) * 100
-                    status = "🟢 Đạt" if pct >= 100 else "🔴 Chưa đạt"
+                    status = "🟢 Passed" if pct >= 100 else "🔴 Missed"
                     report_lines.append(
-                        f"**KPI W0:** Thực tế = **{fmt_int(actual_w0)}** {metric} / "
+                        f"**KPI W0:** Actual = **{fmt_int(actual_w0)}** {metric} / "
                         f"Target = {weekly_target} {metric} → **{pct:.1f}%** {status}"
                     )
                 else:
-                    report_lines.append(f"**KPI W0:** Thực tế = **{fmt_int(actual_w0)}** {metric} (không có target)")
+                    report_lines.append(f"**KPI W0:** Actual = **{fmt_int(actual_w0)}** {metric} (No Target)")
             else:
-                report_lines.append(f"*Không có job nào hoàn thành cho {company} trong 5 tuần gần nhất.*")
+                report_lines.append(f"*No completed jobs found for {company} in the past 5 weeks.*")
 
             # Leadtime for this company in W0
             if len(w0_completed_jobs) > 0:
@@ -944,7 +1008,7 @@ def main():
                 if len(comp_lt) > 0:
                     avg_lt = comp_lt['Leadtime_Days'].mean()
                     report_lines.append(
-                        f"**Leadtime W0:** Trung bình **{fmt_float(avg_lt, decimals=2)} ngày** ({len(comp_lt)} jobs)"
+                        f"**Leadtime W0:** Average **{fmt_float(avg_lt, decimals=2)} days** ({len(comp_lt)} jobs)"
                     )
             report_lines.append("")
 
@@ -955,10 +1019,10 @@ def main():
             ]
 
             if len(mc_members_df) > 0:
-                report_lines.append("#### Hiệu suất nhân viên với khách hàng này (W0):")
+                report_lines.append("#### Member Performance for this Client (W0):")
                 report_lines.append(
-                    "| Nhân sự | Task Design | Task Check | Review & Fix | Training | "
-                    "Căn (Units) | Diện tích (Sqm) | Bản vẽ (Layouts) | "
+                    "| Employee  | Task Design | Task Check | R&F | Training | "
+                    "Dwelling Units) | Sqm | Designed (Layouts) | "
                     "Est.Design Median | Amd.Design Median |"
                 )
                 report_lines.append(
@@ -975,7 +1039,7 @@ def main():
                         f"| {uname} "
                         f"| {fmt_int(mrow.get('Design', 0))} "
                         f"| {fmt_int(mrow.get('Check', 0))} "
-                        f"| {fmt_int(mrow.get('Review & Fix', 0))} "
+                        f"| {fmt_int(mrow.get('R&F', 0))} "
                         f"| {fmt_int(mrow.get('Training', 0))} "
                         f"| {fmt_int(mrow.get('Design_Units', 0))} "
                         f"| {fmt_sqm(mrow.get('Design_Sqm', 0))} "
@@ -984,18 +1048,18 @@ def main():
                         f"| {fmt_hrs(amd_des)} |"
                     )
             else:
-                report_lines.append("*Không có thành viên nào hoàn thành task cho khách hàng này trong W0.*")
+                report_lines.append("*No member completed tasks for this client in W0.*")
 
             report_lines.append("\n---\n")
 
         # ── TEAM SUMMARY SECTION ──────────────────────────────────────────────
-        report_lines.append(f"## {t_idx}.{len(ordered_companies)+1}. Tổng hợp Team {team_name}")
+        report_lines.append(f"## {t_idx}.{len(ordered_companies)+1}. Team Summary: {team_name}")
         report_lines.append("")
 
         # 5-week team total
         if len(team_trend) > 0 and team_trend['Jobs_Completed'].sum() > 0:
-            report_lines.append("#### Tổng khối lượng công việc 5 tuần (tất cả khách hàng):")
-            report_lines.append("| Chỉ số | W-4 | W-3 | W-2 | W-1 | W0 (Tuần này) |")
+            report_lines.append("#### Total Team Workload (Past 5 Weeks - All Clients):")
+            report_lines.append("| Metrics | W-4 | W-3 | W-2 | W-1 | W0 (Current week) |")
             report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
 
             t_jobs = []; t_units = []; t_sqm = []; t_layouts = []
@@ -1006,10 +1070,10 @@ def main():
                 t_sqm.append(sub['Designed Square Meter'].sum())
                 t_layouts.append(sub['Designed Layout'].sum())
 
-            report_lines.append("| **Tổng Job hoàn thành** | " + " | ".join([f"**{fmt_int(x)}**" for x in t_jobs]) + " |")
-            report_lines.append("| Thiết kế: Căn hộ (Units) | " + " | ".join([fmt_int(x) for x in t_units]) + " |")
-            report_lines.append("| Thiết kế: Diện tích (Sqm) | " + " | ".join([fmt_sqm(x) for x in t_sqm]) + " |")
-            report_lines.append("| Thiết kế: Bản vẽ (Layouts) | " + " | ".join([fmt_int(x) for x in t_layouts]) + " |")
+            report_lines.append("| **Total Completed Jobs** | " + " | ".join([f"**{fmt_int(x)}**" for x in t_jobs]) + " |")
+            report_lines.append("| Dwelling Units | " + " | ".join([fmt_int(x) for x in t_units]) + " |")
+            report_lines.append("| Area (Sqm) | " + " | ".join([fmt_sqm(x) for x in t_sqm]) + " |")
+            report_lines.append("| Designed (Layouts) | " + " | ".join([fmt_int(x) for x in t_layouts]) + " |")
             report_lines.append("")
 
         # Leadtime summary across all customers for W0
@@ -1017,12 +1081,12 @@ def main():
             team_lt = w0_completed_jobs[w0_completed_jobs['Team'] == team_name]
             if len(team_lt) > 0:
                 avg_lt_team = team_lt['Leadtime_Days'].mean()
-                report_lines.append(f"**Leadtime trung bình toàn Team W0:** {fmt_float(avg_lt_team, decimals=2)} ngày ({len(team_lt)} jobs)")
+                report_lines.append(f"**Team Average Leadtime (W0):** {fmt_float(avg_lt_team, decimals=2)} days ({len(team_lt)} jobs)")
 
                 lt_by_comp = team_lt.groupby('Company')['Leadtime_Days'].agg(['count', 'mean']).reset_index()
                 lt_by_comp.columns = ['Company', 'Jobs', 'Avg_LT']
-                report_lines.append("\n**Leadtime trung bình theo Khách hàng:**")
-                report_lines.append("| Khách hàng | Số Job W0 | Leadtime TB (ngày) |")
+                report_lines.append("\n**Average Leadtime by Client:**")
+                report_lines.append("| Client | W0 Completed Jobs | Avg Leadtime (days) |")
                 report_lines.append("| :--- | :---: | :---: |")
                 for _, lr in lt_by_comp.sort_values('Avg_LT').iterrows():
                     report_lines.append(f"| {lr['Company']} | {fmt_int(lr['Jobs'])} | {fmt_float(lr['Avg_LT'], decimals=2)} |")
@@ -1031,10 +1095,10 @@ def main():
         # Member productivity summary (all customers, W0)
         team_workload = member_workload[member_workload['userName'].isin(team_members)]
         if len(team_workload) > 0:
-            report_lines.append("#### Tổng năng suất thành viên W0 (tất cả khách hàng):")
+            report_lines.append("#### Total Member Output W0 (All Clients):")
             report_lines.append(
-                "| Nhân sự | Design | Check | Review & Fix | Training | "
-                "Căn (Units) | Diện tích (Sqm) | Bản vẽ (Layouts) |"
+                "| Employee | Design | Check | R&F | Training | "
+                "Dwelling Units | Sqm | Designed Layouts |"
             )
             report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
             for _, row in team_workload.sort_values('Design', ascending=False).iterrows():
@@ -1042,7 +1106,7 @@ def main():
                     f"| {row['userName']} "
                     f"| {fmt_int(row['Design'])} "
                     f"| {fmt_int(row['Check'])} "
-                    f"| {fmt_int(row['Review & Fix'])} "
+                    f"| {fmt_int(row['R&F'])} "
                     f"| {fmt_int(row['Training'])} "
                     f"| {fmt_int(row['Design_Units'])} "
                     f"| {fmt_sqm(row['Design_Sqm'])} "
@@ -1053,16 +1117,16 @@ def main():
         # Intraweek tasks
         team_intraweek = intraweek_summary[intraweek_summary['userName'].isin(team_members)]
         if len(team_intraweek) > 0:
-            report_lines.append("#### Nhiệm vụ bắt đầu và hoàn thành cùng tuần (Intraweek):")
-            report_lines.append("| Nhân sự | Design | Check | Review & Fix | Training | Tổng Intraweek |")
+            report_lines.append("#### Tasks Started & Completed in Same Week (Intraweek):")
+            report_lines.append("| Member | Design | Check | R&F | Training | Total Intraweek |")
             report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
             for _, row in team_intraweek.iterrows():
-                tot = row['Design'] + row['Check'] + row['Review & Fix'] + row['Training']
+                tot = row['Design'] + row['Check'] + row['R&F'] + row['Training']
                 report_lines.append(
                     f"| {row['userName']} "
                     f"| {fmt_int(row['Design'])} "
                     f"| {fmt_int(row['Check'])} "
-                    f"| {fmt_int(row['Review & Fix'])} "
+                    f"| {fmt_int(row['R&F'])} "
                     f"| {fmt_int(row['Training'])} "
                     f"| {fmt_int(tot)} |"
                 )
@@ -1072,10 +1136,10 @@ def main():
         if len(attendance_summary) > 0:
             team_att = attendance_summary[attendance_summary['Workload_User'].isin(team_members)]
             if len(team_att) > 0:
-                report_lines.append("#### Attendance Working Hour:")
+                report_lines.append("#### Attendance & Working Hours:")
                 report_lines.append(
-                    "| Nhân sự | Mã NV | Ngày LV | Giờ TC | Giờ TT | Tăng ca | Chênh lệch | "
-                    "Đi muộn (>10m) | Về sớm | Nghỉ phép | Nghỉ KL |"
+                    "| Employee | Employee ID | Working Days | Standard Working Hour | Actual Working Time | OT | Difference | "
+                    "Late CI (>10m) | Early CO | Leave | Unpaid Leave |"
                 )
                 report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
                 for _, row in team_att.sort_values('Actual_Hours', ascending=False).iterrows():
@@ -1088,9 +1152,9 @@ def main():
                         f"| {row['Unpaid_Leave'] if row['Unpaid_Leave'] > 0 else '-'} |"
                     )
             else:
-                report_lines.append("\n*Không tìm thấy dữ liệu chuyên cần cho thành viên team.*")
+                report_lines.append("\n*No attendance data found for team members.*")
         else:
-            report_lines.append("\n*Không thể tải hoặc xử lý dữ liệu chấm công chuyên cần.*")
+            report_lines.append("\n*Unable to load or process attendance data.*")
 
         report_lines.append("\n---\n")
 
@@ -1111,28 +1175,28 @@ def main():
     
     def get_aging_bucket(days):
         if days <= 1:
-            return '0-1 ngày'
+            return '0-1 days'
         elif days == 2:
-            return '2 ngày'
+            return '2 days'
         elif days == 3:
-            return '3 ngày'
+            return '3 days'
         elif days == 4:
-            return '4 ngày'
+            return '4 days'
         elif days == 5:
-            return '5 ngày'
+            return '5 days'
         else:
-            return '>5 ngày'
+            return '>5 days'
             
     backlog_df['Aging_Bucket'] = backlog_df['Aging_Days'].apply(get_aging_bucket)
     
     # Compile Backlog Table
-    report_lines.append("# 6. BÁO CÁO THỐNG KÊ JOB BACKLOG & AGING PROFILE")
-    report_lines.append(f"Bảng thống kê lượng công việc tồn đọng (Job Backlog) chưa hoàn thành tính đến cuối tuần báo cáo ({w0_end.strftime('%d/%m/%Y')}) phân rã theo thời gian tồn đọng (Aging Profile):")
+    report_lines.append("# 6. JOB BACKLOG & AGING PROFILE REPORT")
+    report_lines.append(f"Summary table of uncompleted workload (Job Backlog) as of reporting week end ({w0_end.strftime('%d/%m/%Y')}), categorized by aging profile:")
     report_lines.append("")
-    report_lines.append("| Team / Khách hàng | 0-1 ngày | 2 ngày | 3 ngày | 4 ngày | 5 ngày | >5 ngày | Tổng Backlog |")
+    report_lines.append("| Team / Client | 0-1 Days | 2 Days | 3 Days | 4 Days | 5 Days | >5 Days | Total Backlog |")
     report_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
     
-    buckets = ['0-1 ngày', '2 ngày', '3 ngày', '4 ngày', '5 ngày', '>5 ngày']
+    buckets = ['0-1 days', '2 days', '3 days', '4 days', '5 days', '>5 days']
     team_list = ['Frame & Truss', 'Drafting', 'Estimating', 'Engineered Wood Products (EWP)', 'Cleveland', 'Unknown']
     
     overall_totals = {b: 0 for b in buckets}
@@ -1172,7 +1236,7 @@ def main():
             report_lines.append(f"| - {comp} | " + " | ".join([fmt_int(c_totals[b]) for b in buckets]) + f" | {fmt_int(c_tot_sum)} |")
             
     # Add Overall Total Row
-    report_lines.append(f"| **TỔNG CỘNG** | " + " | ".join([f"**{fmt_int(overall_totals[b])}**" for b in buckets]) + f" | **{fmt_int(overall_totals['Total'])}** |")
+    report_lines.append(f"| **TOTAL** | " + " | ".join([f"**{fmt_int(overall_totals[b])}**" for b in buckets]) + f" | **{fmt_int(overall_totals['Total'])}** |")
     report_lines.append("")
     report_lines.append("---\n")
 
@@ -1218,7 +1282,7 @@ def main():
         sl = str(s).lower()
         if 'design'  in sl: return 'Design'
         if 'check'   in sl: return 'Check'
-        if 'review'  in sl and 'fix' in sl: return 'Review & Fix'
+        if 'review'  in sl and 'fix' in sl: return 'R&F'
         if 'training' in sl: return 'Training'
         if 'admin'   in sl or 'qs' in sl: return 'Admin-QS'
         return 'Other'
@@ -1238,18 +1302,18 @@ def main():
         return f"{m}m"
 
     # ─── 7.1 Team-level Summary ────────────────────────────────────────────────
-    report_lines.append("# 7. TASK COMPLEXITY PROFILE — THỜI GIAN TRUNG BÌNH PER TASK")
+    report_lines.append("# 7. TASK COMPLEXITY PROFILE — AVERAGE HOUR PER TASK")
     report_lines.append(
-        f"Phân tích thời gian đầu tư thực tế (`investedSeconds`) trên từng task hoàn thành "
-        f"trong tuần ({w0_start.strftime('%d/%m/%Y')} – {w0_end.strftime('%d/%m/%Y')}). "
-        "Giúp đánh giá mức độ phức tạp của công việc theo loại project (Est/Amd/Det) và "
-        "theo công đoạn (Design / Check / Review & Fix)."
+        f"Analyzes the actual effort spent (`investedSeconds`) on tasks completed "
+        f"during the week ({w0_start.strftime('%d/%m/%Y')} – {w0_end.strftime('%d/%m/%Y')}). "
+        "GHelps assess the workload associated with each project type (Est/Amd/Det) and "
+        "each work phase (Design / Check / R&F)."
     )
     report_lines.append("")
 
     # Pivot prefixes we care about (exclude Admin/Other for complexity read)
     COMPLEXITY_PREFIXES = ['Est', 'Amd', 'Det']
-    FLOW_COLS = ['Design', 'Check', 'Review & Fix']
+    FLOW_COLS = ['Design', 'Check', 'R&F']
 
     # Build header
     header_parts = ["| Team | Project | # Tasks | Median (hrs) | Mean (hrs) |"]
@@ -1280,16 +1344,16 @@ def main():
                 median = f_df['investedHours'].median()
                 mean   = f_df['investedHours'].mean()
                 report_lines.append(
-                    f"| &nbsp;&nbsp;&nbsp;↳ | {flow} | {count} | {fmt_hrs(median)} | {fmt_hrs(mean)} |"
+                    f"|    ↳ | {flow} | {count} | {fmt_hrs(median)} | {fmt_hrs(mean)} |"
                 )
 
     report_lines.append("")
 
     # ─── 7.2 Member Drill-Down ────────────────────────────────────────────────
-    report_lines.append("## 7.2 Chi tiết theo Thành viên")
+    report_lines.append("## 7.2 Member Breakdown")
     report_lines.append(
-        "Thời gian trung bình (Median) mỗi thành viên thực hiện task Design và Check "
-        "theo từng loại project trong tuần:"
+        "Shows the median time spent by each team member on Design and Check tasks "
+        "across different project types during the week:"
     )
     report_lines.append("")
 
@@ -1301,7 +1365,7 @@ def main():
     ]
     col_headers = " | ".join([f"{p}.{f[:3]}" for (p, f) in col_specs])
     report_lines.append(
-        f"| Team | Thành viên | {col_headers} | # Tasks |"
+        f"| Team | Member | {col_headers} | # Tasks |"
     )
     report_lines.append(
         "| :--- | :--- | " + " | ".join(["---:"] * (len(col_specs) + 1)) + " |"
@@ -1333,24 +1397,31 @@ def main():
 
     report_lines.append("")
     report_lines.append("---\n")
-    report_lines.append("*(Báo cáo được tạo tự động bởi hệ thống Weekly HR Report Framework)*")
+    report_lines.append("*(Report automatically generated by Weekly HR Report Framework)*")
 
     # Save report
     os.makedirs(output_dir, exist_ok=True)
-    report_file_name = f"Weekly_Performance_Report_{w0_end.strftime('%Y%m%d')}.md"
+    report_file_name = f"Weekly_Performance_Report_{w0_end.strftime('%Y%m%d')}.docx"
     report_file_path = os.path.join(output_dir, report_file_name)
     
     try:
-        with open(report_file_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(report_lines))
-        print(f"\nWeekly HR report generated successfully and saved at: {report_file_path}")
+        final_path = generate_docx_report(report_lines, report_file_path)
+        print(f"\nWeekly HR report generated successfully and saved at: {final_path}")
         
         # Export dashboard JSON
         import subprocess
+        temp_md_path = report_file_path.replace('.docx', '.tmp.md')
+        with open(temp_md_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(report_lines))
+
         json_out_path = os.path.join(output_dir, "dashboard", "data.js")
+        os.makedirs(os.path.dirname(json_out_path), exist_ok=True)
         parser_script = os.path.join(os.path.dirname(__file__), "parse_dashboard_json.py")
         if os.path.exists(parser_script):
-            subprocess.run([sys.executable, parser_script, report_file_path, json_out_path])
+            subprocess.run([sys.executable, parser_script, temp_md_path, json_out_path])
+
+        if os.path.exists(temp_md_path):
+            os.remove(temp_md_path)
             
     except Exception as e:
         print(f"Error saving report file: {e}")

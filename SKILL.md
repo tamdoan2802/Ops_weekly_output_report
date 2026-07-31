@@ -12,7 +12,7 @@ Xử lý dữ liệu thô từ nhiều nguồn (Excel files) để tạo ra mộ
 
 ## 2. Nguồn Dữ Luận Đầu Vào
 Skill yêu cầu các tệp dữ liệu sau nằm trong `G:\My Drive\Dữ liệu nhân sự\Data\`:
-- **Workload**: `Workload/Report_Past Month_Jul 11, 2026.xlsx` (Hoặc file mới nhất tương ứng). Gồm dữ liệu Tasks, Jobs.
+- **Workload**: `Workload/Report_Past Month.xlsx` (Hoặc file mới nhất tương ứng). Gồm dữ liệu Tasks, Jobs.
 - **Attendance**: `Attendance/HR_Fact_Attendance.xlsx`. Gồm sheets: `FACT_Attendance_Daily` (dữ liệu chấm công hàng ngày), `Req_Leave` (Dữ liệu xin nghỉ phép), `Req_OT` (Dữ liệu xin tăng ca).
 - **KPI**: Mapping KPI chuẩn được thiết lập trong script.
 
@@ -40,7 +40,7 @@ Script sẽ tự động:
    - Thống kê nghỉ phép, đi muộn, tăng ca (OT).
 5. **Backlog & Aging**: Thống kê và phân nhóm job tồn đọng theo nhóm số ngày chờ xử lý.
 6. **Task Complexity Profile**: Thống kê số giờ đầu tư thực tế (Invested Seconds) trung vị và trung bình cho từng loại Task.
-7. **Kết Xuất Markdown**: Lưu báo cáo vào thư mục `G:\My Drive\Dữ liệu nhân sự\reports\` (ví dụ: `Weekly_HR_Report_20260712.md`).
+7. **Kết Xuất Word (.docx)**: Lưu báo cáo vào thư mục `G:\My Drive\Dữ liệu nhân sự\.agents\skills\Ops_weekly_output_report\reports\` (ví dụ: `Weekly_Performance_Report_20260802.docx`).
 
 ### Bước 3: Đọc và Trình Bày
 - Sau khi script chạy xong, Agent sẽ tìm đường dẫn file báo cáo mới được xuất.
