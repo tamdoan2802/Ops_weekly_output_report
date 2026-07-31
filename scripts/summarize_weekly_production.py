@@ -199,12 +199,31 @@ def generate_docx_report(lines, docx_path):
         table = doc.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        table.autofit = False
         
-        # Column Widths for 6-column Output Tables
+        # Determine exact column widths to sum up to 19.0 cm for all table types
         col_widths = None
-        if len(headers) == 6:
-            col_widths = [Cm(5.0), Cm(2.55), Cm(2.55), Cm(2.55), Cm(2.55), Cm(3.6)]
-            table.autofit = False
+        num_cols = len(headers)
+        if num_cols == 6:
+            # Output trend or 6-col tables
+            col_widths = [Cm(5.0), Cm(2.55), Cm(2.55), Cm(2.55), Cm(2.55), Cm(3.8)]
+        elif num_cols == 8:
+            # Member performance or Backlog tables
+            first_header = headers[0].lower()
+            if "team" in first_header or "client" in first_header or "khách" in first_header:
+                col_widths = [Cm(4.3), Cm(2.1), Cm(2.1), Cm(2.1), Cm(2.1), Cm(2.1), Cm(2.1), Cm(2.1)]
+            else:
+                col_widths = [Cm(3.8), Cm(2.1), Cm(1.9), Cm(2.1), Cm(1.9), Cm(2.4), Cm(2.4), Cm(2.4)]
+        elif num_cols == 11:
+            # Attendance table
+            col_widths = [Cm(3.2), Cm(1.4), Cm(1.5), Cm(1.4), Cm(1.5), Cm(1.5), Cm(1.6), Cm(1.4), Cm(1.4), Cm(1.8), Cm(2.3)]
+        elif num_cols == 5:
+            # Task complexity table
+            col_widths = [Cm(5.0), Cm(3.0), Cm(3.0), Cm(4.0), Cm(4.0)]
+        else:
+            # Generic fallback scaling to ~19cm
+            w_each = 19.0 / num_cols
+            col_widths = [Cm(w_each)] * num_cols
 
         # Format Header Row
         hdr_row = table.rows[0]
