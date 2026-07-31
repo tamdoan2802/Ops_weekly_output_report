@@ -1,3 +1,9 @@
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.shared import Cm, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 import os
 import sys
 import re
@@ -165,9 +171,12 @@ def generate_docx_report(lines, docx_path):
     in_table = False
     table_lines = []
     
+    def set_cell_bg(cell, hex_color):
+        shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hex_color}"/>')
+        cell._tc.get_or_add_tcPr().append(shading_elm)
+
     def process_table():
         if not table_lines: return
-        # Filter out the separator line |---|---|
         headers = [col.strip() for col in table_lines[0].strip('|').split('|')]
         data_rows = []
         for r_line in table_lines[1:]:
@@ -176,29 +185,105 @@ def generate_docx_report(lines, docx_path):
                 continue
             data_rows.append([col.strip() for col in r_line.strip('|').split('|')])
             
+        alignments = []
+        if len(table_lines) > 1:
+            sep_cols = [col.strip() for col in table_lines[1].strip('|').split('|')]
+            for col in sep_cols:
+                if col.startswith(':') and col.endswith(':'):
+                    alignments.append('center')
+                elif col.endswith(':'):
+                    alignments.append('right')
+                else:
+                    alignments.append('left')
+
         table = doc.add_table(rows=1, cols=len(headers))
         table.style = 'Table Grid'
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
         
-        # Add headers
-        hdr_cells = table.rows[0].cells
+        # Column Widths for 6-column Output Tables
+        col_widths = None
+        if len(headers) == 6:
+            col_widths = [Cm(5.0), Cm(2.55), Cm(2.55), Cm(2.55), Cm(2.55), Cm(3.6)]
+            table.autofit = False
+
+        # Format Header Row
+        hdr_row = table.rows[0]
+        hdr_row.height = Cm(1)
+        hdr_row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+        hdr_cells = hdr_row.cells
+        
         for i, header in enumerate(headers):
             if i < len(hdr_cells):
-                hdr_cells[i].text = header
+                cell = hdr_cells[i]
+                if col_widths and i < len(col_widths):
+                    cell.width = col_widths[i]
+                set_cell_bg(cell, "061D47") # Dark Navy Blue
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                p = cell.paragraphs[0]
+                p.text = ""
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(0)
+                p.paragraph_format.line_spacing = 1.15
+                
+                align = alignments[i] if i < len(alignments) else ('center' if i > 0 else 'left')
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if align == 'center' else (WD_ALIGN_PARAGRAPH.RIGHT if align == 'right' else WD_ALIGN_PARAGRAPH.LEFT)
+                
+                run = p.add_run(header)
+                run.bold = True
+                run.font.color.rgb = RGBColor(255, 255, 255)
             
-        # Add data
+        # Format Data Rows
         for row_data in data_rows:
-            row_cells = table.add_row().cells
+            row = table.add_row()
+            row.height = Cm(1)
+            row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+            row_cells = row.cells
+            
+            first_col_text = row_data[0].strip() if len(row_data) > 0 else ""
+            is_sub_item = first_col_text.startswith("•") or first_col_text.startswith("-") or first_col_text.startswith("↳")
+            
+            # Determine Row Shading
+            if is_sub_item:
+                bg = "FFFFFF"
+            elif any(k in first_col_text for k in ["Completed Jobs", "Số Job hoàn thành", "Total Completed Jobs"]):
+                bg = "98E398" # Light Green
+            elif "Headcount" in first_col_text:
+                bg = "EBA6EB" # Soft Lavender/Pink
+            elif any(k in first_col_text for k in ["Units", "Area", "Layouts", "Sqm", "Designed", "Căn hộ", "Diện tích", "Bản vẽ"]):
+                bg = "B8E4F7" # Light Sky Blue
+            else:
+                bg = "FFFFFF"
+                
             for i, cell_data in enumerate(row_data):
                 if i < len(row_cells):
-                    cell_data = cell_data.replace('&nbsp;', ' ').strip()
-                    p = row_cells[i].paragraphs[0]
+                    cell = row_cells[i]
+                    if col_widths and i < len(col_widths):
+                        cell.width = col_widths[i]
+                    if bg != "FFFFFF":
+                        set_cell_bg(cell, bg)
+                    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+                    
+                    cell_clean = cell_data.replace('&nbsp;', ' ').strip()
+                    p = cell.paragraphs[0]
                     p.text = ""
-                    parts = re.split(r'(\?\*\?\*.*?\?\*\?\*)', cell_data)
+                    p.paragraph_format.space_before = Pt(0)
+                    p.paragraph_format.space_after = Pt(0)
+                    p.paragraph_format.line_spacing = 1.15
+                    
+                    align = alignments[i] if i < len(alignments) else ('center' if i > 0 else 'left')
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if align == 'center' else (WD_ALIGN_PARAGRAPH.RIGHT if align == 'right' else WD_ALIGN_PARAGRAPH.LEFT)
+                    
+                    parts = re.split(r'(\*\*.*?\*\*)', cell_clean)
                     for part in parts:
                         if part.startswith('**') and part.endswith('**'):
-                            p.add_run(part[2:-2]).bold = True
+                            r = p.add_run(part[2:-2])
+                            r.bold = True
                         else:
-                            p.add_run(part)
+                            r = p.add_run(part)
+                            if is_sub_item:
+                                r.italic = True
+                            elif bg != "FFFFFF":
+                                r.bold = True
                     
         table_lines.clear()
 
@@ -230,6 +315,9 @@ def generate_docx_report(lines, docx_path):
                 doc.add_heading(line[6:].strip(), level=5)
             else:
                 p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(0)
+                p.paragraph_format.line_spacing = 1.15
                 parts = re.split(r'(\*\*.*?\*\*)', line)
                 for part in parts:
                     if part.startswith('**') and part.endswith('**'):
@@ -251,6 +339,7 @@ def generate_docx_report(lines, docx_path):
         doc.save(alt_path)
         print(f"Warning: Target file '{docx_path}' was locked. Saved report to: {alt_path}")
         return alt_path
+
 
 def main():
     import argparse

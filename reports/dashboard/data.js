@@ -5,7 +5,7 @@ const dashboardData = {
     "total_sqm": 0,
     "total_layouts": 0,
     "avg_leadtime": 7.4,
-    "backlog_over_5d": 98
+    "backlog_over_5d": 125
   },
   "teams": [
     "Frame & Truss",
@@ -65,27 +65,27 @@ const dashboardData = {
     "data": {
       "Frame & Truss": [
         0,
-        1,
-        1,
+        0,
+        7,
         0,
         0,
-        4
+        7
       ],
       "Drafting": [
         0,
-        16,
         0,
+        9,
+        1,
         4,
-        2,
-        71
+        87
       ],
       "Estimating": [
         0,
-        1,
         0,
         2,
-        0,
-        6
+        1,
+        3,
+        11
       ],
       "Cleveland": [
         0,
@@ -93,7 +93,7 @@ const dashboardData = {
         3,
         0,
         1,
-        17
+        20
       ]
     }
   },
