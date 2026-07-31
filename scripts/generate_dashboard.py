@@ -840,9 +840,13 @@ def export_data_and_copy_template(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(template_path, 'r', encoding='utf-8') as src:
         content = src.read()
+    
+    import time
+    ts = int(time.time())
+    content = content.replace('references/dashdata.js', f'references/dashdata.js?v={ts}')
+    
     with open(output_path, 'w', encoding='utf-8') as dst:
         dst.write(content)
-        
     print(f"  ✓  Dashboard copied to → {output_path}")
 
 
