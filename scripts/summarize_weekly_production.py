@@ -440,7 +440,7 @@ def main():
     target_check_tasks = tasks_df[
         (tasks_df['jobId'].isin(target_jobs)) &
         (tasks_df['taskTypeName'].str.contains('Check', case=False, na=False)) &
-        (tasks_df['Flow Task_status'].isin(['Complete', 'Completed'])) &
+        (tasks_df['Flow Task_status'] == 'Complete') &
         (tasks_df['timeOutcome'].notna())
     ]
     
@@ -566,7 +566,7 @@ def main():
             comp_job_ids = comp_jobs_w['Job #'].tolist()
             design_tasks_w = tasks_df[
                 (tasks_df['jobId'].isin(comp_job_ids)) &
-                (tasks_df['Flow Task_status'].isin(['Complete', 'Completed'])) &
+                (tasks_df['Flow Task_status'] == 'Complete') &
                 (tasks_df['taskTypeName'].str.contains('Design', case=False, na=False))
             ].copy()
             
@@ -637,7 +637,7 @@ def main():
     w0_tasks = tasks_df[
         (tasks_df['timeOutcome'] >= w0_start) &
         (tasks_df['timeOutcome'] <= w0_end) &
-        (tasks_df['Flow Task_status'].isin(['Complete', 'Completed']))
+        (tasks_df['Flow Task_status'] == 'Complete')
     ].copy()
     
     w0_tasks['norm_user'] = w0_tasks['userName'].apply(normalize_name)
@@ -668,7 +668,7 @@ def main():
         (tasks_df['timeOutcome'] <= w0_end) &
         (tasks_df['timeCouldBeginAt'] >= w0_start) &
         (tasks_df['timeCouldBeginAt'] <= w0_end) &
-        (tasks_df['Flow Task_status'].isin(['Complete', 'Completed']))
+        (tasks_df['Flow Task_status'] == 'Complete')
     ].copy()
     
     w0_intraweek_tasks['norm_user'] = w0_intraweek_tasks['userName'].apply(normalize_name)
@@ -1271,9 +1271,12 @@ def main():
     w0_end_naive = w0_end.replace(tzinfo=None)
     
     backlog_df = jobs_df[
-        (jobs_df['Status'] != 'Complete') &
+        (jobs_df['Status'].isin(['Pending', 'In Progress'])) &
         (jobs_df['Time Created'].notna())
     ].copy()
+
+    # Count paused jobs separately for summary
+    paused_jobs_count = len(jobs_df[jobs_df['Status'] == 'Paused'])
     
     backlog_df['Time Created_Naive'] = backlog_df['Time Created'].dt.tz_localize(None)
     backlog_df = backlog_df[backlog_df['Time Created_Naive'] <= w0_end_naive]
@@ -1347,6 +1350,66 @@ def main():
     report_lines.append(f"| **TOTAL** | " + " | ".join([f"**{fmt_int(overall_totals[b])}**" for b in buckets]) + f" | **{fmt_int(overall_totals['Total'])}** |")
     report_lines.append("")
     report_lines.append("---\n")
+
+    if paused_jobs_count > 0:
+        report_lines.append(f"**Note:** {paused_jobs_count} additional jobs are currently **Paused** (on hold) and excluded from the backlog count above.")
+        report_lines.append("")
+
+    # ── METRIC 7B: REJECTION RATE (CHECK TASK QA QUALITY) ────────────────────
+    print("Calculating Rejection Rate for W0...")
+    w0_check_tasks = tasks_df[
+        (tasks_df['timeOutcome'] >= w0_start) &
+        (tasks_df['timeOutcome'] <= w0_end) &
+        (tasks_df['taskTypeName'].str.contains('Check', case=False, na=False)) &
+        (tasks_df['Flow Task_status'].isin(['Complete', 'Rejected']))
+    ].copy()
+
+    if len(w0_check_tasks) > 0:
+        w0_check_tasks['_user'] = w0_check_tasks['userName']
+        w0_check_tasks['_team'] = w0_check_tasks['_user'].map(user_to_team).fillna('Unknown')
+        w0_check_tasks = w0_check_tasks[~w0_check_tasks['_team'].isin(['Excluded', 'Unknown'])]
+        w0_check_tasks['_company'] = w0_check_tasks['jobId'].apply(
+            lambda x: job_map.get(x, {}).get('Company', 'Unknown'))
+
+        report_lines.append("# 7. CHECK TASK REJECTION RATE")
+        report_lines.append(f"Rejection rate of Check tasks completed or rejected during W0 ({w0_start.strftime('%d/%m/%Y')} – {w0_end.strftime('%d/%m/%Y')}):")
+        report_lines.append("")
+
+        for team_name in team_list:
+            team_checks = w0_check_tasks[w0_check_tasks['_team'] == team_name]
+            if len(team_checks) == 0:
+                continue
+
+            report_lines.append(f"### {team_name}")
+            report_lines.append("")
+            report_lines.append("| Member | Check Done | Rejected | Rate |")
+            report_lines.append("| :--- | :---: | :---: | :---: |")
+
+            member_stats = []
+            for user in sorted(team_checks['_user'].unique()):
+                u_checks = team_checks[team_checks['_user'] == user]
+                done = len(u_checks[u_checks['Flow Task_status'] == 'Complete'])
+                rejected = len(u_checks[u_checks['Flow Task_status'] == 'Rejected'])
+                total = done + rejected
+                rate = (rejected / total * 100) if total > 0 else 0
+                member_stats.append((user, done, rejected, rate))
+
+            for user, done, rejected, rate in member_stats:
+                rate_str = f"{rate:.0f}%" if rate > 0 else '-'
+                report_lines.append(
+                    f"| {user} | {fmt_int(done)} | {fmt_int(rejected)} | {rate_str} |")
+
+            # Team totals
+            t_done = sum(s[1] for s in member_stats)
+            t_rej = sum(s[2] for s in member_stats)
+            t_total = t_done + t_rej
+            t_rate = (t_rej / t_total * 100) if t_total > 0 else 0
+            report_lines.append(
+                f"| **Total** | **{fmt_int(t_done)}** | **{fmt_int(t_rej)}** | **{t_rate:.0f}%** |")
+            report_lines.append("")
+
+        report_lines.append("---")
+        report_lines.append("")
 
     # ── METRIC 8 (Section 7): TASK COMPLEXITY PROFILE ────────────────────────────
     print("Calculating Task Complexity Profile (investedSeconds)...")

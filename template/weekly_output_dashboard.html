@@ -426,6 +426,14 @@
         }
         @keyframes stripe { 0%{background-position:1rem 0} 100%{background-position:0 0} }
 
+        .bar-paused {
+            background: repeating-linear-gradient(
+                -45deg, #f0b429, #f0b429 4px, #e0a820 4px, #e0a820 8px
+            ) !important;
+            opacity: 0.75;
+        }
+        .paused-badge { color: #b48a00; font-size: 11px; font-weight: 600; }
+
         .tooltip {
             position: absolute; background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
             border: 1px solid var(--border); padding: 0.875rem; border-radius: 8px;
@@ -746,7 +754,8 @@ function renderTeam() {
                 if (activePct > 0) {
                     const ab = document.createElement("div"); 
                     ab.className = `bar-active bar-${catCode}` + (createdPct === 0 ? " only-one-part" : "");
-                    if (task.inProgress) ab.className += " bar-p";
+                    if (task.paused) ab.className += " bar-paused";
+                    else if (task.inProgress) ab.className += " bar-p";
                     ab.style.width = `${activePct}%`; bw.appendChild(ab);
                 }
                 
@@ -1078,7 +1087,7 @@ function renderPassthroughChart(f){
   const recentWeeks = DATA.weeks.slice(-8);
 
   const byWeek = {};
-  recentWeeks.forEach(w=>byWeek[w]={sent:0, intra:0, pass:0, backlog:0});
+  recentWeeks.forEach(w=>byWeek[w]={sent:0, intra:0, pass:0, backlog:0, paused:0});
   DATA.passthrough_weekly.forEach(r=>{
     if(f.team!=='all' && r.Team!==f.team) return;
     if(f.cust!=='all' && r.Customer!==f.cust) return;
@@ -1087,6 +1096,7 @@ function renderPassthroughChart(f){
     byWeek[r.Week].intra += r.intra_week;
     byWeek[r.Week].pass += r.pass_week;
     byWeek[r.Week].backlog += r.backlog;
+    byWeek[r.Week].paused += (r.backlog_paused || 0);
   });
   const labels = recentWeeks.map(weekLabel);
 
@@ -1107,12 +1117,14 @@ function renderPassthroughChart(f){
   // Backlog is a current-status snapshot, not historical — only meaningful for the newest week.
   const latestWeek = recentWeeks[recentWeeks.length-1];
   const backlogSeries = recentWeeks.map(w => w===latestWeek ? byWeek[w].backlog : null);
+  const pausedSeries  = recentWeeks.map(w => w===latestWeek ? byWeek[w].paused  : null);
 
   const ptDatasets = [
     { label:'Job sent', data: recentWeeks.map(w=>byWeek[w].sent), backgroundColor:'#2a78d6', borderRadius:3 },
     { label:'Job complete — intra-week', data: recentWeeks.map(w=>byWeek[w].intra), backgroundColor:'#1baf7a', stack:'complete', borderRadius:3 },
     { label:'Job complete — pass-week', data: recentWeeks.map(w=>byWeek[w].pass), backgroundColor:'#8fd4b8', stack:'complete', borderRadius:3 },
-    { label:'Job backlog (current, as of latest week only)', data: backlogSeries, backgroundColor:'#e34948', borderRadius:3 }
+    { label:'Active backlog', data: backlogSeries, backgroundColor:'#e34948', stack:'backlog', borderRadius:3 },
+    { label:'Paused (on hold)', data: pausedSeries, backgroundColor:'#f0b429', stack:'backlog', borderRadius:3 }
   ];
 
   if(passthroughChart) passthroughChart.destroy();
@@ -1124,7 +1136,7 @@ function renderPassthroughChart(f){
         tooltip:{ callbacks:{ footer: (items)=>{
           const w = recentWeeks[items[0].dataIndex];
           const d = byWeek[w];
-          return 'Total complete: ' + (d.intra+d.pass);
+          return 'Total complete: ' + (d.intra+d.pass) + (d.paused>0 ? ' · Paused: '+d.paused : '');
         } } }
       },
       scales:{
@@ -1161,11 +1173,12 @@ function renderByCustomerChart(f){
     if(r.Week!==f.week) return;
     if(f.team!=='all' && r.Team!==f.team) return;
     if(f.cust!=='all' && r.Customer!==f.cust) return;
-    if(!byCust[r.Customer]) byCust[r.Customer] = {sent:0, intra:0, pass:0, backlog:0};
+    if(!byCust[r.Customer]) byCust[r.Customer] = {sent:0, intra:0, pass:0, backlog:0, paused:0};
     byCust[r.Customer].sent += r.jobs_sent;
     byCust[r.Customer].intra += r.intra_week;
     byCust[r.Customer].pass += r.pass_week;
     byCust[r.Customer].backlog += r.backlog;
+    byCust[r.Customer].paused += (r.backlog_paused || 0);
   });
 
   // Backlog is a current-status snapshot — only meaningful when the selected week is the newest week.
@@ -1218,7 +1231,8 @@ function renderByCustomerChart(f){
     { label:'Job sent', data: custList.map(c=>byCust[c].sent), backgroundColor:'#2a78d6', borderRadius:3 },
     { label:'Job complete — intra-week', data: custList.map(c=>byCust[c].intra), backgroundColor:'#1baf7a', stack:'complete', borderRadius:3 },
     { label:'Job complete — pass-week', data: custList.map(c=>byCust[c].pass), backgroundColor:'#8fd4b8', stack:'complete', borderRadius:3 },
-    { label:'Job backlog' + (showBacklog?'':' (only shown for newest week)'), data: custList.map(c=> showBacklog ? byCust[c].backlog : null), backgroundColor:'#e34948', borderRadius:3 }
+    { label:'Active backlog', data: custList.map(c=> showBacklog ? byCust[c].backlog : null), backgroundColor:'#e34948', stack:'backlog', borderRadius:3 },
+    { label:'Paused (on hold)', data: custList.map(c=> showBacklog ? byCust[c].paused : null), backgroundColor:'#f0b429', stack:'backlog', borderRadius:3 }
   ];
 
   byCustomerChart = new Chart(ctx, {
@@ -1229,7 +1243,7 @@ function renderByCustomerChart(f){
         tooltip:{ callbacks:{ footer: (items)=>{
           const c = custList[items[0].dataIndex];
           const d = byCust[c];
-          return 'Total complete: ' + (d.intra+d.pass);
+          return 'Total complete: ' + (d.intra+d.pass) + (d.paused>0 ? ' · Paused: '+d.paused : '');
         } } }
       },
       scales:{
@@ -1328,6 +1342,13 @@ function renderAgingChart(f){
     activeByCust[r.Customer] = (activeByCust[r.Customer]||0) + r.active_jobs;
   });
 
+  const pausedByCust = {};
+  DATA.sla_active_jobs.forEach(r=>{
+    if(f.team!=='all' && r.Team!==f.team) return;
+    if(f.cust!=='all' && r.Customer!==f.cust) return;
+    pausedByCust[r.Customer] = (pausedByCust[r.Customer]||0) + (r.paused_jobs||0);
+  });
+
   const distByCust = {};
   DATA.sla_distribution.forEach(r=>{
     if(f.team!=='all' && r.Team!==f.team) return;
@@ -1377,7 +1398,7 @@ function renderAgingChart(f){
     return `
     <tr>
       <td><span class="customer-link">${c}</span></td>
-      <td>${fmt.format(activeByCust[c])}</td>
+      <td>${fmt.format(activeByCust[c])}${(pausedByCust[c]||0)>0 ? ` <span class="paused-badge" title="${pausedByCust[c]} paused/on-hold jobs">(${pausedByCust[c]} paused)</span>` : ''}</td>
       <td><div class="sla-row">${badges}</div>${noDue>0 ? `<div style="font-size:10.5px;color:var(--ink-mute);margin-top:3px;">+${noDue} no due date</div>` : ''}</td>
     </tr>`;
   }).join('');

@@ -160,7 +160,7 @@ def prep_tasks(tasks_df: pd.DataFrame, valid_job_ids: set) -> pd.DataFrame:
     # Fallback for Complete/Rejected tasks missing timeOutcome
     if 'timeAccepted' in tasks_df.columns and 'investedSeconds' in tasks_df.columns:
         mask = (
-            tasks_df['Flow Task_status'].isin(['Complete', 'Completed', 'Rejected']) &
+            tasks_df['Flow Task_status'].isin(['Complete', 'Rejected']) &
             tasks_df['timeOutcome'].isna() &
             tasks_df['timeAccepted'].notna()
         )
@@ -181,7 +181,7 @@ def apply_completion_override(
     checks = tasks_df[
         (tasks_df['jobId'].isin(target)) &
         (tasks_df['taskTypeName'].str.contains('Check', case=False, na=False)) &
-        (tasks_df['Flow Task_status'].isin(['Complete', 'Completed'])) &
+        (tasks_df['Flow Task_status'] == 'Complete') &
         (tasks_df['timeOutcome'].notna())
     ]
     if len(checks):
@@ -292,7 +292,7 @@ def _comp_tasks(tasks_df, ws, we):
     return tasks_df[
         (tasks_df['timeOutcome'] >= ws) &
         (tasks_df['timeOutcome'] <= we) &
-        (tasks_df['Flow Task_status'].isin(['Complete', 'Completed']))
+        (tasks_df['Flow Task_status'] == 'Complete')
     ]
 
 def build_customer_weekly(
@@ -308,7 +308,7 @@ def build_customer_weekly(
         # Design-task volumes for completed jobs
         dt = tasks_df[
             (tasks_df['jobId'].isin(cj['Job #'])) &
-            (tasks_df['Flow Task_status'].isin(['Complete', 'Completed'])) &
+            (tasks_df['Flow Task_status'] == 'Complete') &
             (tasks_df['taskTypeName'].str.contains('Design', case=False, na=False))
         ].copy()
         dt['_company'] = dt['jobId'].map(lambda x: job_map.get(x, {}).get('Company', 'Unknown'))
@@ -422,11 +422,14 @@ def build_passthrough_weekly(
     jobs_df, weeks, job_team_cache, tasks_df, job_map
 ) -> list[dict]:
     latest_label = weeks[-1][2] if weeks else ''
-    # Current backlog snapshot per (team, company)
-    active = jobs_df[jobs_df['Status'] != 'Complete'].copy()
-    active['_team'] = active['Job #'].map(job_team_cache).fillna('Unmapped')
-    active = active[~active['_team'].isin(['Excluded', 'Unknown', 'Unmapped'])]
+    # Current backlog snapshot per (team, company) — split active vs paused
+    non_complete = jobs_df[jobs_df['Status'] != 'Complete'].copy()
+    non_complete['_team'] = non_complete['Job #'].map(job_team_cache).fillna('Unmapped')
+    non_complete = non_complete[~non_complete['_team'].isin(['Excluded', 'Unknown', 'Unmapped'])]
+    active = non_complete[non_complete['Status'] != 'Paused']
+    paused = non_complete[non_complete['Status'] == 'Paused']
     backlog_snap = active.groupby(['_team', 'Company']).size().to_dict()
+    paused_snap  = paused.groupby(['_team', 'Company']).size().to_dict()
 
     rows = []
     for ws, we, wlabel in weeks:
@@ -455,10 +458,11 @@ def build_passthrough_weekly(
             i_n = len(c_sub[c_sub['Job #'].isin(intra_ids)])
             p_n = len(c_sub[~c_sub['Job #'].isin(intra_ids)])
             bl  = int(backlog_snap.get((team, company), 0)) if wlabel == latest_label else 0
+            bl_p = int(paused_snap.get((team, company), 0)) if wlabel == latest_label else 0
             rows.append({
                 'Week': wlabel, 'Team': team, 'Customer': company,
                 'jobs_sent': s_n, 'intra_week': i_n,
-                'pass_week': p_n, 'backlog': bl,
+                'pass_week': p_n, 'backlog': bl, 'backlog_paused': bl_p,
             })
     return rows
 
@@ -502,7 +506,7 @@ def build_job_scatter(
             dt = tasks_df[
                 (tasks_df['jobId'] == jid) &
                 (tasks_df['taskTypeName'].str.contains('Design', case=False, na=False)) &
-                (tasks_df['Flow Task_status'].isin(['Complete', 'Completed']))
+                (tasks_df['Flow Task_status'] == 'Complete')
             ]
             sqm   = float(dt['Designed Square Meter'].sum()) if len(dt) else 0.0
             units = float(dt['Dwelling Units'].sum())        if len(dt) else 0.0
@@ -562,6 +566,7 @@ def build_sla_datasets(
     active = jobs_df[jobs_df['Status'] != 'Complete'].copy()
     active['_team'] = active['Job #'].map(job_team_cache).fillna('Unmapped')
     active = active[~active['_team'].isin(['Excluded', 'Unknown', 'Unmapped'])]
+    active['_is_paused'] = (active['Status'] == 'Paused').astype(int)
 
     if 'Due Date' in active.columns:
         active['Due Date'] = pd.to_datetime(active['Due Date'], errors='coerce')
@@ -569,9 +574,14 @@ def build_sla_datasets(
     else:
         active['_bucket'] = 'No due date'
 
-    act_agg = active.groupby(['_team', 'Company']).size().reset_index(name='active_jobs')
+    act_agg = active.groupby(['_team', 'Company']).agg(
+        active_jobs=('_is_paused', 'size'),
+        paused_jobs=('_is_paused', 'sum')
+    ).reset_index()
     sla_active = [
-        {'Team': r['_team'], 'Customer': r['Company'], 'active_jobs': int(r['active_jobs'])}
+        {'Team': r['_team'], 'Customer': r['Company'],
+         'active_jobs': int(r['active_jobs']),
+         'paused_jobs': int(r['paused_jobs'])}
         for _, r in act_agg.iterrows()
     ]
 
@@ -621,7 +631,7 @@ def build_backlog_forecast(
     trailing_labels = [w[2] for w in trailing]
 
     # Current backlog
-    active = jobs_df[jobs_df['Status'] != 'Complete'].copy()
+    active = jobs_df[jobs_df['Status'].isin(['Pending', 'In Progress'])].copy()
     active['_team'] = active['Job #'].map(job_team_cache).fillna('Unmapped')
     active = active[~active['_team'].isin(['Excluded', 'Unknown', 'Unmapped'])]
     backlog_grp = active.groupby(['_team', 'Company']).size().to_dict()
@@ -737,7 +747,8 @@ def build_gantt_raw(
             task_list = []
             for _, t in u_tasks.iterrows():
                 status = str(t.get('Flow Task_status', '')).strip()
-                in_prog = status not in ('Complete', 'Completed')
+                is_paused = (status == 'Paused')
+                in_prog = status not in ('Complete', 'Rejected', 'Paused')
                 invested_t = float(t.get('investedSeconds', 0)) / 3600.0
 
                 # jobRef: try jobRef field first, fall back to jobId
@@ -755,6 +766,7 @@ def build_gantt_raw(
                     'investedTime': f"{invested_t:.2f}h",
                     'investedHrs':  invested_t,
                     'inProgress':   in_prog,
+                    'paused':       is_paused,
                 })
 
             leave_list = []
