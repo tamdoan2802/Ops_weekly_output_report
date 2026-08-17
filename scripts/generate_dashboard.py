@@ -464,6 +464,22 @@ def build_passthrough_weekly(
                 'jobs_sent': s_n, 'intra_week': i_n,
                 'pass_week': p_n, 'backlog': bl, 'backlog_paused': bl_p,
             })
+
+        # For the latest week, also emit rows for (team, company) pairs that have
+        # backlog or paused jobs but had ZERO sent/completed activity this week.
+        # Without this, the backlog bar under-reports the true total backlog because
+        # customers with no new/completed jobs this week are excluded from combos.
+        if wlabel == latest_label:
+            all_backlog_combos = set(backlog_snap.keys()) | set(paused_snap.keys())
+            for team, company in all_backlog_combos - combos:
+                bl   = int(backlog_snap.get((team, company), 0))
+                bl_p = int(paused_snap.get((team, company), 0))
+                if bl > 0 or bl_p > 0:
+                    rows.append({
+                        'Week': wlabel, 'Team': team, 'Customer': company,
+                        'jobs_sent': 0, 'intra_week': 0,
+                        'pass_week': 0, 'backlog': bl, 'backlog_paused': bl_p,
+                    })
     return rows
 
 
