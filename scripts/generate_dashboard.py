@@ -234,11 +234,30 @@ def build_user_maps(tasks_df: pd.DataFrame, emp_df: pd.DataFrame):
 
 # ── JOB → TEAM PRE-COMPUTATION ────────────────────────────────────────────────
 
+def fallback_team_by_company(company: str, task_type_names: list[str] = None) -> str:
+    c = str(company).strip().lower()
+    if 'cleveland' in c:
+        return 'Cleveland'
+    if any(k in c for k in ['east coast', 'ecft', 'mcm', 'western']):
+        return 'Frame & Truss'
+    if any(k in c for k in ['nvr', 'prime design', 'creative homes', 'g.j', 'res', 'bm design']):
+        return 'Drafting'
+    if any(k in c for k in ['unitex', 'ar built', 'ark coatings', 'all u want', 'demar', 'wood shed', 'drc', 'iti']):
+        return 'Estimating'
+    if 'brock' in c:
+        if task_type_names:
+            combined = ' '.join(str(t).lower() for t in task_type_names)
+            if any(k in combined for k in ['rft', 'pnf', 'truss', 'frame']):
+                return 'Frame & Truss'
+        return 'Estimating'
+    return 'Unmapped'
+
 def build_job_team_cache(
-    tasks_df: pd.DataFrame, user_to_team: dict
+    tasks_df: pd.DataFrame, user_to_team: dict, jobs_df: pd.DataFrame = None
 ) -> dict:
-    """Pre-compute {job_id: team} for every job that has tasks.
-    Priority: Design task → Check task → any task.
+    """Pre-compute {job_id: team} for every job.
+    Priority 1: Design task → Check task → any task with allocated team user.
+    Priority 2 (Fallback): If job has no allocated team tasks, map via Customer/Company.
     """
     df = tasks_df.copy()
     df['_team'] = df['userName'].map(user_to_team).fillna('Unknown')
@@ -252,7 +271,20 @@ def build_job_team_cache(
 
     df['_pri'] = df['taskTypeName'].apply(priority)
     df = df.sort_values(['jobId', '_pri'])
-    return df.groupby('jobId')['_team'].first().to_dict()
+    cache = df.groupby('jobId')['_team'].first().to_dict()
+
+    if jobs_df is not None:
+        task_types_by_job = tasks_df.groupby('jobId')['taskTypeName'].apply(list).to_dict()
+        for _, r in jobs_df.iterrows():
+            jid = r['Job #']
+            if jid not in cache or cache[jid] in ('Unknown', 'Excluded', 'Unmapped'):
+                comp = r.get('Company', '')
+                tt_names = task_types_by_job.get(jid, [])
+                fb = fallback_team_by_company(comp, tt_names)
+                if fb != 'Unmapped':
+                    cache[jid] = fb
+
+    return cache
 
 def job_team(job_id, job_team_cache: dict) -> str:
     return job_team_cache.get(job_id, 'Unmapped')
@@ -934,7 +966,7 @@ def main():
     jobs_df  = apply_completion_override(jobs_df, tasks_df)
 
     user_to_team, workload_to_id = build_user_maps(tasks_df, emp_df)
-    job_team_cache = build_job_team_cache(tasks_df, user_to_team)
+    job_team_cache = build_job_team_cache(tasks_df, user_to_team, jobs_df)
     job_map = jobs_df.set_index('Job #').to_dict('index')
 
     # ── Compute week ranges ────────────────────────────────────────────────────
